@@ -17,3 +17,7 @@ Thumbs.db
 
 # System logs
 *.log
+
+# Local AI Agent Specifications (Do not push to Git)
+AGENTS.md
+GEMINI.md

@@ -21,8 +21,10 @@ Bus_project/
 │   ├── index.html                  # Giao diện bản đồ giám sát 2D Realtime (ArcGIS JS SDK v4.29)
 │   └── admin.html                  # Trang Quản trị Admin Portal (Auth, CRUD & JSON Importer)
 ├── tools/
-│   ├── coordinate_picker.html      # Công cụ click bản đồ thu thập mảng tọa độ
+│   ├── get_coords_1.html           # Công cụ trích xuất dữ liệu lộ trình & trạm nâng cao
 │   └── google_maps_importer.html   # Công cụ import & đảo tọa độ Google Maps
+├── AGENTS.md                       # Đặc tả toàn diện hệ thống cho AI Agent
+├── GEMINI.md                       # Bản tóm tắt nhanh và quy ước cốt lõi cho AI
 ├── ARCHITECTURE_SPEC.md            # Tài liệu đặc tả kiến trúc gốc
 └── README.md                       # Hướng dẫn cài đặt và chạy ứng dụng
 ```

@@ -472,14 +472,18 @@
     let mapView, routeLayer, stopsLayer, fleetLayer, GraphicClass;
     const busGraphics = {};
 
+    let PointClass;
+
     require([
       "esri/Map",
       "esri/views/MapView",
       "esri/Graphic",
       "esri/layers/GraphicsLayer",
+      "esri/geometry/Point",
       "esri/widgets/BasemapToggle"
-    ], function(EsriMap, MapView, Graphic, GraphicsLayer, BasemapToggle) {
+    ], function(EsriMap, MapView, Graphic, GraphicsLayer, Point, BasemapToggle) {
       GraphicClass = Graphic;
+      PointClass = Point;
 
       // 1. Khởi tạo 75% màn hình ở giữa là khung Bản đồ số 2D ArcGIS
       const map = new EsriMap({ basemap: "streets-navigation-vector" });
@@ -573,6 +577,14 @@
         }
         loadSingleRouteData(currentSelectedRoute, currentDirection);
       }
+
+      // Cập nhật hiển thị xe buýt tức thì phù hợp với tuyến đang chọn
+      Object.keys(busGraphics).forEach(vehId => {
+        const g = busGraphics[vehId];
+        if (g && g.attributes) {
+          g.visible = (currentSelectedRoute === "ALL" || g.attributes.route_id === currentSelectedRoute);
+        }
+      });
     }
 
     async function loadSingleRouteData(routeId, direction) {
@@ -722,11 +734,59 @@
           }
         });
 
+        // --------------------------------------------------------------------
+        // BỘ ĐIỀU KHIỂN HOẠT HỌA 60 FPS (SMOOTH INTERPOLATION ANIMATION)
+        // --------------------------------------------------------------------
+        const busAnimStates = {};
+        let isAnimatingFleet = false;
+
+        function animateFleetMovement() {
+          const now = performance.now();
+          let hasActiveAnim = false;
+
+          Object.keys(busAnimStates).forEach(vehId => {
+            const anim = busAnimStates[vehId];
+            const g = busGraphics[vehId];
+            if (!anim || !g) return;
+
+            const elapsed = now - anim.startTime;
+            const progress = Math.min(1.0, elapsed / anim.duration);
+
+            if (progress < 1.0) {
+              hasActiveAnim = true;
+            }
+
+            // Nội suy tuyến tính mượt mà giữa điểm cũ và điểm mới
+            const curLon = anim.startLon + (anim.targetLon - anim.startLon) * progress;
+            const curLat = anim.startLat + (anim.targetLat - anim.startLat) * progress;
+
+            if (PointClass) {
+              g.geometry = new PointClass({
+                longitude: curLon,
+                latitude: curLat
+              });
+            } else {
+              g.geometry = {
+                type: "point",
+                longitude: curLon,
+                latitude: curLat
+              };
+            }
+          });
+
+          if (hasActiveAnim || Object.keys(busAnimStates).length > 0) {
+            requestAnimationFrame(animateFleetMovement);
+          } else {
+            isAnimatingFleet = false;
+          }
+        }
+
         socket.on("fleet_location_update", function(data) {
           if (!data || !data.vehicle_id) return;
 
           // Lọc theo tuyến nếu đang chọn 1 tuyến cụ thể
-          if (currentSelectedRoute !== "ALL" && data.route_id && data.route_id !== currentSelectedRoute) {
+          const isMatchRoute = (currentSelectedRoute === "ALL" || data.route_id === currentSelectedRoute);
+          if (!isMatchRoute) {
             if (busGraphics[data.vehicle_id]) {
               busGraphics[data.vehicle_id].visible = false;
             }
@@ -735,7 +795,7 @@
 
           // Cập nhật thông số Bảng điều khiển nổi bên phải
           const rObj = allRoutes.find(r => r.route_id === data.route_id);
-          const rName = rObj ? `Tuyến ${rObj.route_number}` : (data.route_id || "Tuyến 08");
+          const rName = rObj ? `Tuyến ${rObj.route_number}` : (data.route_id || "Tuyến xe");
           document.getElementById("busRouteName").innerText = rName;
           document.getElementById("busPlate").innerText = data.plate_number || data.vehicle_id;
           document.getElementById("busSpeed").innerText = data.speed_kmh || 0;
@@ -758,9 +818,29 @@
           if (busGraphics[data.vehicle_id]) {
             const g = busGraphics[data.vehicle_id];
             g.visible = true;
-            g.geometry = { type: "point", longitude: data.longitude, latitude: data.latitude };
+            
+            // Điểm bắt đầu nội suy là vị trí hiện thời của Graphic trên bản đồ
+            const startLon = g.geometry ? g.geometry.longitude : data.longitude;
+            const startLat = g.geometry ? g.geometry.latitude : data.latitude;
+
+            busAnimStates[data.vehicle_id] = {
+              startLon: startLon,
+              startLat: startLat,
+              targetLon: data.longitude,
+              targetLat: data.latitude,
+              startTime: performance.now(),
+              duration: 1000 // 1000ms khớp chu kỳ phát của Simulator
+            };
+
             g.attributes.speed = data.speed_kmh;
             g.attributes.heading = data.heading || 0;
+            g.attributes.route_id = data.route_id;
+            g.attributes.route = rName;
+
+            if (!isAnimatingFleet) {
+              isAnimatingFleet = true;
+              requestAnimationFrame(animateFleetMovement);
+            }
           } else {
             const busGraphic = new GraphicClass({
               geometry: { type: "point", longitude: data.longitude, latitude: data.latitude },
@@ -771,7 +851,9 @@
                 outline: { color: [255, 255, 255], width: 2 }
               },
               attributes: {
+                vehicle_id: data.vehicle_id,
                 plate: data.plate_number || data.vehicle_id,
+                route_id: data.route_id,
                 route: rName,
                 speed: data.speed_kmh || 0,
                 heading: data.heading || 0
@@ -784,6 +866,20 @@
 
             fleetLayer.add(busGraphic);
             busGraphics[data.vehicle_id] = busGraphic;
+
+            busAnimStates[data.vehicle_id] = {
+              startLon: data.longitude,
+              startLat: data.latitude,
+              targetLon: data.longitude,
+              targetLat: data.latitude,
+              startTime: performance.now(),
+              duration: 1000
+            };
+
+            if (!isAnimatingFleet) {
+              isAnimatingFleet = true;
+              requestAnimationFrame(animateFleetMovement);
+            }
           }
         });
       } catch (err) {
