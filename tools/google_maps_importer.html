@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Nhập tọa độ Google Maps sang ArcGIS</title>
+  
+  <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/4.29/"></script>
+
+  <style>
+    html, body, #viewDiv { padding: 0; margin: 0; height: 100%; width: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial; }
+    #panel {
+      position: absolute; top: 15px; right: 15px;
+      background: white; padding: 16px; border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.25); z-index: 99; width: 340px;
+    }
+    input, textarea { width: 100%; padding: 8px; margin: 4px 0 8px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px; }
+    button { padding: 8px 14px; background: #0079c1; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; }
+    .btn-green { background: #28a745; }
+    button:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div id="viewDiv"></div>
+  <div id="panel">
+    <h4 style="margin: 0 0 10px 0; color: #0079c1;">🗺️ Chuyển đổi Tọa độ Google Maps</h4>
+    
+    <label style="font-size: 13px;"><b>1. Dán trạm (Lat, Lon):</b></label>
+    <input type="text" id="stopCoords" placeholder="VD: 10.8778, 106.8033" />
+    <button onclick="addStop()">Vẽ Trạm lên bản đồ</button>
+
+    <hr style="margin: 14px 0; border: none; border-top: 1px dashed #ccc;">
+
+    <label style="font-size: 13px;"><b>2. Dán danh sách lộ trình (mỗi dòng 1 điểm):</b></label>
+    <textarea id="routeCoords" rows="5" placeholder="10.8705, 106.8019&#10;10.8778, 106.8033&#10;10.8685, 106.8055"></textarea>
+    <button class="btn-green" onclick="drawRoute()">Vẽ Tuyến Đường</button>
+  </div>
+
+  <script>
+    let myView, routesLayer, stopsLayer, GraphicClass;
+
+    require(["esri/Map", "esri/views/MapView", "esri/Graphic", "esri/layers/GraphicsLayer"],
+    function(Map, MapView, Graphic, GraphicsLayer) {
+      GraphicClass = Graphic;
+      const map = new Map({ basemap: "streets-navigation-vector" });
+      myView = new MapView({ container: "viewDiv", map: map, center: [106.80196, 10.87052], zoom: 15 });
+
+      routesLayer = new GraphicsLayer();
+      stopsLayer = new GraphicsLayer();
+      map.addMany([routesLayer, stopsLayer]);
+    });
+
+    function parseCoord(text) {
+      if (!text.includes(",")) return null;
+      const p = text.split(",");
+      const lat = parseFloat(p[0].trim());
+      const lon = parseFloat(p[1].trim());
+      // Đảo thứ tự từ Google Maps [Lat, Lon] thành chuẩn GIS [Lon, Lat]
+      return (!isNaN(lat) && !isNaN(lon)) ? [lon, lat] : null;
+    }
+
+    function addStop() {
+      const coord = parseCoord(document.getElementById("stopCoords").value);
+      if (!coord) return alert("Sai định dạng tọa độ! Hãy nhập dạng '10.8778, 106.8033'");
+      stopsLayer.add(new GraphicClass({
+        geometry: { type: "point", longitude: coord[0], latitude: coord[1] },
+        symbol: { type: "simple-marker", color: [226, 119, 40], size: "12px", outline: { color: [255, 255, 255], width: 2 } }
+      }));
+      myView.goTo({ center: coord, zoom: 16 });
+    }
+
+    function drawRoute() {
+      const lines = document.getElementById("routeCoords").value.trim().split("\n");
+      const paths = [];
+      lines.forEach(l => {
+        if (l.trim()) {
+          const c = parseCoord(l);
+          if (c) paths.push(c);
+        }
+      });
+      if (paths.length < 2) return alert("Cần tối thiểu 2 điểm tọa độ hợp lệ để vẽ tuyến!");
+      routesLayer.removeAll();
+      routesLayer.add(new GraphicClass({
+        geometry: { type: "polyline", paths: paths },
+        symbol: { type: "simple-line", color: [0, 122, 255], width: 4 }
+      }));
+      myView.goTo(paths);
+    }
+  </script>
+</body>
+</html>

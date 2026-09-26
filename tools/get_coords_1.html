@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Công cụ Xây Dựng Tuyến & Trích Xuất Tọa Độ BusMap - ArcGIS</title>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        html,
+        body,
+        #map {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+            background: #e5e7eb;
+        }
+
+        /* Top Header Bar */
+        #topHeader {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            padding: 8px 16px;
+            border-radius: 10px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .logo-title {
+            font-weight: 700;
+            color: #0284c7;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        /* Control Panel */
+        #controlPanel {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(8px);
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            width: 480px;
+            max-width: calc(100vw - 24px);
+            max-height: calc(100vh - 24px);
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Section Cards */
+        .card-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .card-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        /* Mode Selector */
+        .mode-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .mode-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 10px;
+            background: #fff;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            color: #334155;
+            transition: all 0.15s;
+        }
+
+        .mode-btn:hover {
+            border-color: #0284c7;
+            background: #f0f9ff;
+        }
+
+        .mode-btn.active {
+            border-color: #0284c7;
+            background: #e0f2fe;
+            color: #0369a1;
+        }
+
+        .mode-btn input {
+            display: none;
+        }
+
+        /* Form Inputs */
+        label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 7px 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 12.5px;
+            outline: none;
+            background: #fff;
+            transition: border-color 0.2s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            border-color: #0284c7;
+            box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+        }
+
+        textarea {
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 11.5px;
+            line-height: 1.4;
+            resize: vertical;
+        }
+
+        /* Buttons */
+        .btn-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #0284c7;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            background: #0369a1;
+        }
+
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+
+        .btn-secondary {
+            background: #64748b;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        .btn-success {
+            background: #16a34a;
+        }
+
+        .btn-success:hover {
+            background: #15803d;
+        }
+
+        .btn-warning {
+            background: #d97706;
+        }
+
+        .btn-warning:hover {
+            background: #b45309;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+        }
+
+        .btn-outline:hover {
+            background: #f1f5f9;
+            border-color: #94a3b8;
+        }
+
+        /* Tabs for Export */
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            background: #e2e8f0;
+            padding: 3px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 5px 8px;
+            border: none;
+            background: transparent;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #475569;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s;
+        }
+
+        .tab-btn.active {
+            background: #fff;
+            color: #0284c7;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Live Coord Badge */
+        .coord-badge {
+            background: #0f172a;
+            color: #38bdf8;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-family: Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            word-break: break-all;
+        }
+
+        /* Stops Interactive List */
+        .stops-list-container {
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: #fff;
+            margin-top: 6px;
+        }
+
+        .stop-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 12px;
+            gap: 6px;
+        }
+
+        .stop-item:last-child {
+            border-bottom: none;
+        }
+
+        .stop-item:hover {
+            background: #f8fafc;
+        }
+
+        .stop-num {
+            width: 22px;
+            height: 22px;
+            background: #ea580c;
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .stop-input {
+            flex: 1;
+            padding: 3px 6px !important;
+            font-size: 11.5px !important;
+            border: 1px solid transparent !important;
+            background: transparent !important;
+        }
+
+        .stop-input:focus {
+            border-color: #0284c7 !important;
+            background: #fff !important;
+        }
+
+        .stop-coords-text {
+            font-size: 10.5px;
+            color: #64748b;
+            font-family: monospace;
+            flex-shrink: 0;
+        }
+
+        .stop-actions {
+            display: flex;
+            gap: 3px;
+            flex-shrink: 0;
+        }
+
+        .stop-action-btn {
+            background: transparent;
+            border: none;
+            color: #64748b;
+            cursor: pointer;
+            padding: 3px 5px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .stop-action-btn:hover {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+        .stop-action-btn.btn-del:hover {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        /* Marker Styles */
+        .bus-stop-marker {
+            background-color: #ea580c;
+            color: #ffffff;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .bus-waypoint-marker {
+            background-color: #0284c7;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 1.5px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Top Header Bar -->
+    <div id="topHeader">
+        <div class="logo-title">
+            <i class="fa-solid fa-route"></i>
+            <span>BUS GIS BUILDER</span>
+        </div>
+        <span style="color: #94a3b8;">|</span>
+        <span id="headerStatus" style="color: #475569; font-weight: 500;">Chế độ: Bấm bản đồ để dựng lộ trình bám đường</span>
+        <a href="../frontend/admin.html" target="_blank" class="btn btn-sm btn-outline" style="margin-left: auto;">
+            <i class="fa-solid fa-sliders"></i> Mở Trang Quản Trị
+        </a>
+    </div>
+
+    <!-- Map Canvas -->
+    <div id="map"></div>
+
+    <!-- Floating Control Panel -->
+    <div id="controlPanel">
+        <!-- 1. CẤU HÌNH TUYẾN XE -->
+        <div class="card-box" style="background: #f0f9ff; border-color: #bae6fd;">
+            <div class="card-title" style="color: #0369a1;">
+                <span><i class="fa-solid fa-bus"></i> 1. Thông Tin Tuyến & Tuyến Mẫu</span>
+                <button class="btn btn-sm btn-secondary" onclick="createNewRoute()" title="Làm mới để build tuyến hoàn toàn mới">
+                    <i class="fa-solid fa-plus"></i> Tạo Tuyến Mới
+                </button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div>
+                    <label>Tên Tuyến Xe (Route Name):</label>
+                    <input type="text" id="customRouteName" value="Tuyen_Moi_Tu_Dung" placeholder="VD: Tuyen_19_Ben_Thanh_DHQG" oninput="updateRouteMeta()" />
+                </div>
+                <div>
+                    <label>Số Hiệu:</label>
+                    <input type="text" id="customRouteNumber" value="99" placeholder="08, 10..." oninput="updateRouteMeta()" />
+                </div>
+            </div>
+
+            <div>
+                <label style="color: #0284c7;">⚡ Hoặc Chọn Tuyến Mẫu ĐHQG để nạp nhanh:</label>
+                <select id="busRouteSelect" onchange="loadPresetBusRoute()">
+                    <option value="">-- Chọn tuyến xe buýt mẫu --</option>
+                    <option value="19">Tuyến 19: Bến Thành - KCX Linh Trung - ĐHQG TP.HCM</option>
+                    <option value="33">Tuyến 33: Bến xe An Sương - Suối Tiên - ĐHQG TP.HCM</option>
+                    <option value="08">Tuyến 08: Bến xe Quận 8 - ĐH Quốc Gia</option>
+                    <option value="53">Tuyến 53: Lê Hồng Phong - ĐH Quốc Gia</option>
+                    <option value="99">Tuyến 99: Chợ Thạnh Mỹ Lợi - ĐH Quốc Gia</option>
+                    <option value="10">Tuyến 10: Bến xe Miền Tây - ĐHQG TP.HCM</option>
+                    <option value="50">Tuyến 50: ĐH Bách Khoa (CS1) - ĐHQG TP.HCM (CS2)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 2. CHẾ ĐỘ CLICK BẢN ĐỒ -->
+        <div class="card-box">
+            <div class="card-title">
+                <span><i class="fa-solid fa-crosshairs"></i> 2. Chế Độ Click Bản Đồ</span>
+                <span id="clickModeHelp" style="font-size: 11px; font-weight: normal; color: #0284c7;">Tự động tìm đường thông minh</span>
+            </div>
+
+            <div class="mode-grid">
+                <label class="mode-btn active" id="modeBtnSmart">
+                    <input type="radio" name="clickMode" value="smartRoute" checked onchange="onModeChange('smartRoute')" />
+                    <i class="fa-solid fa-route" style="color: #0284c7;"></i> 🚀 Bám Đường Tự Động
+                </label>
+
+                <label class="mode-btn" id="modeBtnStop">
+                    <input type="radio" name="clickMode" value="stop" onchange="onModeChange('stop')" />
+                    <i class="fa-solid fa-location-dot" style="color: #ea580c;"></i> 📍 Thêm Trạm Dừng
+                </label>
+
+                <label class="mode-btn" id="modeBtnManual">
+                    <input type="radio" name="clickMode" value="manualRoute" onchange="onModeChange('manualRoute')" />
+                    <i class="fa-solid fa-pen-nib" style="color: #7c3aed;"></i> ✏️ Nối Thẳng Điểm
+                </label>
+
+                <label class="mode-btn" id="modeBtnInspect">
+                    <input type="radio" name="clickMode" value="info" onchange="onModeChange('info')" />
+                    <i class="fa-solid fa-magnifying-glass-location" style="color: #059669;"></i> 🔍 Xem Tọa Độ
+                </label>
+            </div>
+
+            <!-- Coordinate Box -->
+            <div style="margin-top: 8px;">
+                <div class="coord-badge" id="clickedCoordDisplay">
+                    📍 Click vào bản đồ để lấy tọa độ tức thời (WGS84 & Google Maps)
+                </div>
+            </div>
+
+            <!-- Quick Action Toolbar -->
+            <div class="btn-group" style="margin-top: 8px;">
+                <button class="btn btn-sm btn-outline" onclick="undoLastRoutePoint()" title="Hoàn tác điểm vừa chấm">
+                    <i class="fa-solid fa-rotate-left"></i> Hoàn tác điểm
+                </button>
+                <button class="btn btn-sm btn-outline" onclick="reverseRouteDirection()" title="Đảo ngược chiều lộ trình">
+                    <i class="fa-solid fa-arrows-left-right"></i> Đảo chiều tuyến
+                </button>
+                <button class="btn btn-sm btn-outline" onclick="fitMapToRoute()" title="Zoom vừa vặn toàn bộ tuyến">
+                    <i class="fa-solid fa-expand"></i> Căn góc nhìn
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="clearAllGraphics()" title="Xóa toàn bộ để vẽ lại từ đầu">
+                    <i class="fa-solid fa-trash-can"></i> Xóa hết
+                </button>
+            </div>
+        </div>
+
+        <!-- 3. QUẢN LÝ DANH SÁCH TRẠM DỪNG (ĐƯỢC PHÉP SỬA, XÓA, THÊM TRỰC TIẾP) -->
+        <div class="card-box">
+            <div class="card-title">
+                <span><i class="fa-solid fa-map-pin" style="color: #ea580c;"></i> 3. Danh Sách Trạm Dừng (<span id="stopCountBadge">0</span>)</span>
+                <button class="btn btn-sm btn-outline" onclick="addStopFromPrompt()" title="Thêm trạm bằng cách nhập tên">
+                    <i class="fa-solid fa-plus"></i> Thêm Trạm
+                </button>
+            </div>
+
+            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                <input type="text" id="quickStopName" placeholder="Nhập tên trạm để gán cho điểm click tiếp theo..." style="font-size: 11.5px;" />
+            </div>
+
+            <div class="stops-list-container" id="stopsListContainer">
+                <div style="padding: 16px; text-align: center; color: #94a3b8; font-size: 12px;">
+                    Chưa có trạm dừng nào. Chọn chế độ <b>"📍 Thêm Trạm Dừng"</b> và click lên bản đồ để đặt trạm.
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. TRUNG TÂM TRÍCH XUẤT & BIÊN TẬP JSON HAI CHIỀU -->
+        <div class="card-box" style="background: #ffffff; border: 1.5px solid #0284c7;">
+            <div class="card-title" style="color: #0369a1;">
+                <span><i class="fa-solid fa-file-code"></i> 4. Trích Xuất & Đồng Bộ JSON</span>
+                <span id="exportSummaryBadge" style="font-size: 11px; font-weight: 600; color: #16a34a;">0 trạm | 0 điểm</span>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="tab-nav">
+                <button id="tabFullPackage" class="tab-btn active" onclick="switchExportTab('fullPackage')">📦 Trọn Gói Tuyến</button>
+                <button id="tabStopsJson" class="tab-btn" onclick="switchExportTab('stopsJson')">📍 Mảng Trạm (JSON)</button>
+                <button id="tabRouteJson" class="tab-btn" onclick="switchExportTab('routeJson')">🛣️ Lộ Trình (JSON)</button>
+                <button id="tabStopsCsv" class="tab-btn" onclick="switchExportTab('stopsCsv')">📊 Bảng CSV</button>
+            </div>
+
+            <!-- Editable Textarea -->
+            <textarea id="outputData" rows="6" oninput="onTextareaJsonEdited()" placeholder="Dữ liệu JSON sẽ tự động trích xuất theo thời gian thực tại đây..."></textarea>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; flex-wrap: wrap; gap: 6px;">
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-success" onclick="copyResult()">
+                        <i class="fa-solid fa-copy"></i> Sao chép JSON
+                    </button>
+                    <button class="btn btn-sm btn-outline" onclick="downloadCurrentData()">
+                        <i class="fa-solid fa-download"></i> Tải File
+                    </button>
+                </div>
+
+                <button class="btn btn-sm btn-warning" onclick="applyJsonToMap()" title="Đọc dữ liệu trong khung text và vẽ lại bản đồ">
+                    <i class="fa-solid fa-arrows-rotate"></i> Áp Dụng JSON Lên Bản Đồ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --------------------------------------------------------------------
+        // 1. CẤU HÌNH BẢN ĐỒ LEAFLET
+        // --------------------------------------------------------------------
+        const googleRoadmap = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            maxZoom: 21,
+            attribution: 'Google Maps'
+        });
+
+        const googleSatellite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 21,
+            attribution: 'Google Satellite'
+        });
+
+        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: 'OpenStreetMap'
+        });
+
+        const map = L.map('map', {
+            center: [10.87052, 106.80196],
+            zoom: 15,
+            layers: [googleRoadmap],
+            zoomControl: false
+        });
+
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        L.control.layers({
+            "Google Maps Đường Phố": googleRoadmap,
+            "Google Maps Vệ Tinh": googleSatellite,
+            "OpenStreetMap": osm
+        }, null, { position: 'bottomleft' }).addTo(map);
+
+        // Graphics Layer Groups
+        const stopsLayer = L.layerGroup().addTo(map);
+        const waypointsLayer = L.layerGroup().addTo(map);
+        let routePolyline = null;
+
+        // Core State
+        let listStops = []; // [ { id, name, coords: [lon, lat], marker } ]
+        let keyWaypoints = []; // [ [lon, lat], ... ]
+        let fullRouteCoords = []; // [ [lon, lat], ... ]
+        let currentRouteName = "Tuyen_Moi_Tu_Dung";
+        let currentRouteNumber = "99";
+        let currentTab = "fullPackage";
+        let currentClickMode = "smartRoute";
+
+        // --------------------------------------------------------------------
+        // 2. CHẾ ĐỘ CLICK BẢN ĐỒ & TƯƠNG TÁC
+        // --------------------------------------------------------------------
+        function onModeChange(mode) {
+            currentClickMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            if (mode === 'smartRoute') document.getElementById('modeBtnSmart').classList.add('active');
+            if (mode === 'stop') document.getElementById('modeBtnStop').classList.add('active');
+            if (mode === 'manualRoute') document.getElementById('modeBtnManual').classList.add('active');
+            if (mode === 'info') document.getElementById('modeBtnInspect').classList.add('active');
+
+            const helpTexts = {
+                'smartRoute': '🚀 Bấm các điểm chính, hệ thống tự bám theo tim đường phố thực tế',
+                'stop': '📍 Bấm để đặt trạm dừng (có thể kéo thả đổi vị trí trạm)',
+                'manualRoute': '✏️ Bấm từng điểm để nối thẳng thủ công',
+                'info': '🔍 Bấm để tra cứu tọa độ [Lon, Lat] chi tiết'
+            };
+            document.getElementById('headerStatus').innerText = `Chế độ: ${helpTexts[mode]}`;
+            document.getElementById('clickModeHelp').innerText = helpTexts[mode];
+        }
+
+        map.on('click', async function (e) {
+            const lat = parseFloat(e.latlng.lat.toFixed(6));
+            const lon = parseFloat(e.latlng.lng.toFixed(6));
+
+            document.getElementById('clickedCoordDisplay').innerHTML =
+                `<b>ArcGIS WGS84 [Lon, Lat]:</b> [${lon}, ${lat}]<br/><b>Google Maps [Lat, Lon]:</b> ${lat}, ${lon}`;
+
+            if (currentClickMode === 'stop') {
+                const customName = document.getElementById('quickStopName').value.trim();
+                const name = customName || `Trạm ${listStops.length + 1}`;
+                addStopMarker(lat, lon, name);
+                document.getElementById('quickStopName').value = "";
+            } else if (currentClickMode === 'manualRoute') {
+                keyWaypoints.push([lon, lat]);
+                fullRouteCoords.push([lon, lat]);
+                renderRoutePolyline();
+            } else if (currentClickMode === 'smartRoute') {
+                keyWaypoints.push([lon, lat]);
+                addWaypointMarker(lat, lon, keyWaypoints.length);
+                if (keyWaypoints.length === 1) {
+                    fullRouteCoords = [[lon, lat]];
+                    renderRoutePolyline();
+                } else {
+                    await routeSnapRoad();
+                }
+            }
+            refreshExportView();
+        });
+
+        // Routing OSRM
+        async function routeSnapRoad() {
+            if (keyWaypoints.length < 2) return;
+            const coordString = keyWaypoints.map(pt => `${pt[0]},${pt[1]}`).join(';');
+            const url = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.routes && data.routes.length > 0) {
+                    fullRouteCoords = data.routes[0].geometry.coordinates;
+                    renderRoutePolyline();
+                }
+            } catch (err) {
+                fullRouteCoords = [...keyWaypoints];
+                renderRoutePolyline();
+            }
+        }
+
+        function renderRoutePolyline() {
+            if (routePolyline) map.removeLayer(routePolyline);
+            if (fullRouteCoords.length > 0) {
+                const leafletLatLngs = fullRouteCoords.map(pt => [pt[1], pt[0]]);
+                routePolyline = L.polyline(leafletLatLngs, {
+                    color: '#0284c7',
+                    weight: 5,
+                    opacity: 0.9,
+                    lineJoin: 'round'
+                }).addTo(map);
+            }
+            refreshExportView();
+        }
+
+        function addWaypointMarker(lat, lon, index) {
+            L.circleMarker([lat, lon], {
+                radius: 5,
+                fillColor: '#0284c7',
+                color: '#ffffff',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.9
+            }).addTo(waypointsLayer).bindTooltip(`Điểm mốc #${index}`, { permanent: false, direction: 'top' });
+        }
+
+        // --------------------------------------------------------------------
+        // 3. QUẢN LÝ TRẠM DỪNG & DANH SÁCH TƯƠNG TÁC (CRUD STOPS)
+        // --------------------------------------------------------------------
+        function addStopMarker(lat, lon, name, customId = null) {
+            const stopId = customId || (listStops.length + 1);
+            
+            const icon = L.divIcon({
+                className: 'custom-stop-divicon',
+                html: `<div class="bus-stop-marker" title="${name}" id="marker_stop_${stopId}">${stopId}</div>`,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+
+            const marker = L.marker([lat, lon], {
+                icon: icon,
+                draggable: true
+            }).addTo(stopsLayer);
+
+            const stopObj = {
+                id: stopId,
+                name: name,
+                coords: [lon, lat],
+                marker: marker
+            };
+
+            listStops.push(stopObj);
+
+            marker.bindPopup(`
+                <div style="font-size: 12px; line-height: 1.5;">
+                    <b style="color: #ea580c;">[#${stopId}] ${name}</b><br/>
+                    <b>ArcGIS [Lon, Lat]:</b> [${lon}, ${lat}]<br/>
+                    <button onclick="deleteStopById(${stopId})" style="margin-top: 6px; padding: 3px 8px; background: #dc2626; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                        <i class="fa-solid fa-trash"></i> Xóa trạm này
+                    </button>
+                </div>
+            `);
+
+            marker.on('dragend', function () {
+                const pos = marker.getLatLng();
+                const newLat = parseFloat(pos.lat.toFixed(6));
+                const newLon = parseFloat(pos.lng.toFixed(6));
+                stopObj.coords = [newLon, newLat];
+                marker.setPopupContent(`
+                    <div style="font-size: 12px; line-height: 1.5;">
+                        <b style="color: #ea580c;">[#${stopId}] ${stopObj.name}</b><br/>
+                        <b>ArcGIS [Lon, Lat]:</b> [${newLon}, ${newLat}]<br/>
+                        <button onclick="deleteStopById(${stopId})" style="margin-top: 6px; padding: 3px 8px; background: #dc2626; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                            <i class="fa-solid fa-trash"></i> Xóa trạm này
+                        </button>
+                    </div>
+                `);
+                renderStopsListUI();
+                refreshExportView();
+            });
+
+            renderStopsListUI();
+            refreshExportView();
+        }
+
+        function renderStopsListUI() {
+            const container = document.getElementById('stopsListContainer');
+            document.getElementById('stopCountBadge').innerText = listStops.length;
+
+            if (listStops.length === 0) {
+                container.innerHTML = `
+                    <div style="padding: 16px; text-align: center; color: #94a3b8; font-size: 12px;">
+                        Chưa có trạm dừng nào. Chọn chế độ <b>"📍 Thêm Trạm Dừng"</b> và click lên bản đồ để đặt trạm.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = "";
+            listStops.forEach((st, idx) => {
+                const stt = idx + 1;
+                st.id = stt; // Cập nhật lại số thứ tự liên tục
+                
+                // Cập nhật số hiển thị trên marker DOM nếu có
+                if (st.marker) {
+                    const iconDiv = st.marker.getElement()?.querySelector('.bus-stop-marker');
+                    if (iconDiv) iconDiv.innerText = stt;
+                }
+
+                html += `
+                    <div class="stop-item" id="stop_item_${stt}">
+                        <div class="stop-num">${stt}</div>
+                        <input type="text" class="stop-input" value="${st.name}" onchange="updateStopName(${stt}, this.value)" placeholder="Tên trạm..." title="Sửa tên trạm trực tiếp" />
+                        <span class="stop-coords-text">[${st.coords[0].toFixed(4)}, ${st.coords[1].toFixed(4)}]</span>
+                        <div class="stop-actions">
+                            <button class="stop-action-btn" onclick="focusStop(${stt})" title="Xem vị trí trạm trên bản đồ"><i class="fa-solid fa-crosshairs"></i></button>
+                            <button class="stop-action-btn" onclick="moveStopOrder(${stt}, -1)" title="Di chuyển lên trên" ${idx === 0 ? 'disabled style="opacity:0.3;"' : ''}><i class="fa-solid fa-arrow-up"></i></button>
+                            <button class="stop-action-btn" onclick="moveStopOrder(${stt}, 1)" title="Di chuyển xuống dưới" ${idx === listStops.length - 1 ? 'disabled style="opacity:0.3;"' : ''}><i class="fa-solid fa-arrow-down"></i></button>
+                            <button class="stop-action-btn btn-del" onclick="deleteStopById(${stt})" title="Xóa trạm này"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function updateStopName(stt, newName) {
+            const st = listStops.find(s => s.id === stt);
+            if (st) {
+                st.name = newName || `Trạm ${stt}`;
+                if (st.marker) {
+                    st.marker.bindPopup(`
+                        <div style="font-size: 12px; line-height: 1.5;">
+                            <b style="color: #ea580c;">[#${stt}] ${st.name}</b><br/>
+                            <b>ArcGIS [Lon, Lat]:</b> [${st.coords[0]}, ${st.coords[1]}]<br/>
+                            <button onclick="deleteStopById(${stt})" style="margin-top: 6px; padding: 3px 8px; background: #dc2626; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                                <i class="fa-solid fa-trash"></i> Xóa trạm này
+                            </button>
+                        </div>
+                    `);
+                }
+                refreshExportView();
+            }
+        }
+
+        function deleteStopById(stt) {
+            const idx = listStops.findIndex(s => s.id === stt);
+            if (idx !== -1) {
+                const removed = listStops.splice(idx, 1)[0];
+                if (removed.marker) stopsLayer.removeLayer(removed.marker);
+                renderStopsListUI();
+                refreshExportView();
+            }
+        }
+
+        function moveStopOrder(stt, offset) {
+            const idx = listStops.findIndex(s => s.id === stt);
+            const targetIdx = idx + offset;
+            if (idx === -1 || targetIdx < 0 || targetIdx >= listStops.length) return;
+
+            // Swap
+            const temp = listStops[idx];
+            listStops[idx] = listStops[targetIdx];
+            listStops[targetIdx] = temp;
+
+            renderStopsListUI();
+            refreshExportView();
+        }
+
+        function focusStop(stt) {
+            const st = listStops.find(s => s.id === stt);
+            if (st && st.marker) {
+                map.setView([st.coords[1], st.coords[0]], 17, { animate: true });
+                st.marker.openPopup();
+            }
+        }
+
+        function addStopFromPrompt() {
+            const name = prompt("Nhập tên trạm dừng mới:", `Trạm ${listStops.length + 1}`);
+            if (!name) return;
+            // Đặt trạm ở tâm bản đồ hiện tại
+            const center = map.getCenter();
+            addStopMarker(parseFloat(center.lat.toFixed(6)), parseFloat(center.lng.toFixed(6)), name);
+        }
+
+        // --------------------------------------------------------------------
+        // 4. QUẢN LÝ LỘ TRÌNH & TIỆN ÍCH ĐIỀU KHIỂN
+        // --------------------------------------------------------------------
+        function createNewRoute() {
+            if (listStops.length > 0 || fullRouteCoords.length > 0) {
+                if (!confirm("Tạo tuyến mới sẽ xóa các điểm và trạm hiện tại trên bản đồ?")) return;
+            }
+            clearAllGraphics();
+            const rName = prompt("Nhập tên tuyến mới:", "Tuyen_Moi_Tu_Dung");
+            if (rName) {
+                document.getElementById('customRouteName').value = rName.replace(/\s+/g, '_');
+                currentRouteName = document.getElementById('customRouteName').value;
+            }
+            refreshExportView();
+        }
+
+        function updateRouteMeta() {
+            currentRouteName = document.getElementById('customRouteName').value.trim() || "Tuyen_Moi";
+            currentRouteNumber = document.getElementById('customRouteNumber').value.trim() || "99";
+            refreshExportView();
+        }
+
+        function undoLastRoutePoint() {
+            if (keyWaypoints.length === 0) return;
+            keyWaypoints.pop();
+            
+            // Xóa điểm mốc cuối trên layer
+            waypointsLayer.clearLayers();
+            keyWaypoints.forEach((pt, i) => addWaypointMarker(pt[1], pt[0], i + 1));
+
+            if (keyWaypoints.length >= 2) {
+                routeSnapRoad();
+            } else if (keyWaypoints.length === 1) {
+                fullRouteCoords = [keyWaypoints[0]];
+                renderRoutePolyline();
+            } else {
+                fullRouteCoords = [];
+                if (routePolyline) map.removeLayer(routePolyline);
+                refreshExportView();
+            }
+        }
+
+        function reverseRouteDirection() {
+            if (fullRouteCoords.length > 0) {
+                fullRouteCoords.reverse();
+            }
+            if (keyWaypoints.length > 0) {
+                keyWaypoints.reverse();
+                waypointsLayer.clearLayers();
+                keyWaypoints.forEach((pt, i) => addWaypointMarker(pt[1], pt[0], i + 1));
+            }
+            if (listStops.length > 0) {
+                listStops.reverse();
+                renderStopsListUI();
+            }
+            renderRoutePolyline();
+            refreshExportView();
+        }
+
+        function fitMapToRoute() {
+            const allBounds = [];
+            fullRouteCoords.forEach(c => allBounds.push([c[1], c[0]]));
+            listStops.forEach(s => allBounds.push([s.coords[1], s.coords[0]]));
+            if (allBounds.length > 0) {
+                map.fitBounds(allBounds, { padding: [40, 40] });
+            }
+        }
+
+        function clearAllGraphics() {
+            stopsLayer.clearLayers();
+            waypointsLayer.clearLayers();
+            if (routePolyline) map.removeLayer(routePolyline);
+            listStops = [];
+            keyWaypoints = [];
+            fullRouteCoords = [];
+            document.getElementById('busRouteSelect').value = "";
+            renderStopsListUI();
+            refreshExportView();
+        }
+
+        // --------------------------------------------------------------------
+        // 5. TRUNG TÂM TRÍCH XUẤT & BIÊN TẬP JSON HAI CHIỀU
+        // --------------------------------------------------------------------
+        function switchExportTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            if (tabName === 'fullPackage') document.getElementById('tabFullPackage').classList.add('active');
+            if (tabName === 'stopsJson') document.getElementById('tabStopsJson').classList.add('active');
+            if (tabName === 'routeJson') document.getElementById('tabRouteJson').classList.add('active');
+            if (tabName === 'stopsCsv') document.getElementById('tabStopsCsv').classList.add('active');
+            refreshExportView();
+        }
+
+        function refreshExportView() {
+            document.getElementById('exportSummaryBadge').innerHTML =
+                `<b>${listStops.length}</b> trạm | <b>${fullRouteCoords.length}</b> điểm lộ trình`;
+
+            const outputBox = document.getElementById('outputData');
+
+            if (currentTab === 'fullPackage') {
+                const fullPkg = {
+                    routeName: currentRouteName,
+                    routeNumber: currentRouteNumber,
+                    totalStops: listStops.length,
+                    totalPathPoints: fullRouteCoords.length,
+                    stops: listStops.map((s, idx) => ({
+                        id: idx + 1,
+                        name: s.name,
+                        geometry: { type: "Point", coordinates: s.coords }
+                    })),
+                    routeGeometry: {
+                        type: "LineString",
+                        coordinates: fullRouteCoords
+                    }
+                };
+                outputBox.value = JSON.stringify(fullPkg, null, 2);
+
+            } else if (currentTab === 'stopsJson') {
+                const exportStops = listStops.map((s, idx) => ({
+                    stt: idx + 1,
+                    name: s.name,
+                    coords_arcgis_wgs84: s.coords,
+                    coords_google_maps: [s.coords[1], s.coords[0]]
+                }));
+                outputBox.value = JSON.stringify(exportStops, null, 2);
+
+            } else if (currentTab === 'routeJson') {
+                outputBox.value = JSON.stringify(fullRouteCoords);
+
+            } else if (currentTab === 'stopsCsv') {
+                let csv = "STT,Ten_Tram,Kinh_Do_Longitude_X,Vi_Do_Latitude_Y\n";
+                listStops.forEach((s, idx) => {
+                    csv += `${idx + 1},"${s.name}",${s.coords[0]},${s.coords[1]}\n`;
+                });
+                outputBox.value = csv;
+            }
+        }
+
+        function onTextareaJsonEdited() {
+            // Khi người dùng chỉnh sửa JSON trực tiếp trong textarea
+            document.getElementById('exportSummaryBadge').innerHTML = `<span style="color: #d97706;">Đã sửa thủ công (Bấm "Áp Dụng")</span>`;
+        }
+
+        function applyJsonToMap() {
+            const rawText = document.getElementById('outputData').value.trim();
+            if (!rawText) return alert("Khung dữ liệu đang trống!");
+
+            try {
+                const data = JSON.parse(rawText);
+
+                // 1. Gói Trọn Gói (Full Package)
+                if (data.routeGeometry || (data.stops && Array.isArray(data.stops))) {
+                    clearAllGraphics();
+                    if (data.routeName) {
+                        document.getElementById('customRouteName').value = data.routeName;
+                        currentRouteName = data.routeName;
+                    }
+                    if (data.routeNumber) {
+                        document.getElementById('customRouteNumber').value = data.routeNumber;
+                        currentRouteNumber = data.routeNumber;
+                    }
+
+                    // Nạp trạm
+                    if (Array.isArray(data.stops)) {
+                        data.stops.forEach(st => {
+                            const lon = st.geometry ? st.geometry.coordinates[0] : (st.coords_arcgis_wgs84 ? st.coords_arcgis_wgs84[0] : st.coords[0]);
+                            const lat = st.geometry ? st.geometry.coordinates[1] : (st.coords_arcgis_wgs84 ? st.coords_arcgis_wgs84[1] : st.coords[1]);
+                            addStopMarker(lat, lon, st.name || `Trạm ${st.id || listStops.length + 1}`);
+                        });
+                    }
+
+                    // Nạp lộ trình
+                    if (data.routeGeometry && Array.isArray(data.routeGeometry.coordinates)) {
+                        fullRouteCoords = data.routeGeometry.coordinates;
+                        keyWaypoints = [...fullRouteCoords];
+                        renderRoutePolyline();
+                    }
+                    fitMapToRoute();
+                    alert("✓ Đã áp dụng thành công Gói Trọn Gói lên Bản đồ!");
+                }
+
+                // 2. Mảng Lộ trình Polyline [[lon, lat], ...]
+                else if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0]) && typeof data[0][0] === "number") {
+                    fullRouteCoords = data;
+                    keyWaypoints = [...data];
+                    renderRoutePolyline();
+                    fitMapToRoute();
+                    alert(`✓ Đã vẽ lại Lộ trình với ${data.length} điểm tọa độ!`);
+                }
+
+                // 3. Mảng Trạm dừng
+                else if (Array.isArray(data) && data.length > 0) {
+                    stopsLayer.clearLayers();
+                    listStops = [];
+                    data.forEach(st => {
+                        const lon = st.coords_arcgis_wgs84 ? st.coords_arcgis_wgs84[0] : (st.geometry ? st.geometry.coordinates[0] : st.coords[0]);
+                        const lat = st.coords_arcgis_wgs84 ? st.coords_arcgis_wgs84[1] : (st.geometry ? st.geometry.coordinates[1] : st.coords[1]);
+                        addStopMarker(lat, lon, st.name || `Trạm ${st.stt || listStops.length + 1}`);
+                    });
+                    fitMapToRoute();
+                    alert(`✓ Đã nạp lại ${data.length} trạm dừng lên Bản đồ!`);
+                }
+
+                refreshExportView();
+            } catch (err) {
+                alert("❌ Lỗi cú pháp JSON: " + err.message);
+            }
+        }
+
+        function copyResult() {
+            const textarea = document.getElementById('outputData');
+            if (!textarea.value) return alert("Chưa có dữ liệu để sao chép!");
+            textarea.select();
+            navigator.clipboard.writeText(textarea.value);
+            alert("📋 Đã sao chép dữ liệu trích xuất vào bộ nhớ tạm!");
+        }
+
+        function downloadCurrentData() {
+            const content = document.getElementById('outputData').value;
+            if (!content) return alert("Chưa có dữ liệu để tải về!");
+
+            const isCsv = currentTab === 'stopsCsv';
+            const ext = isCsv ? 'csv' : 'json';
+            const mime = isCsv ? 'text/csv;charset=utf-8;' : 'application/json;charset=utf-8;';
+            const filename = `bus_${currentRouteName}_${currentTab}.${ext}`;
+
+            const blob = new Blob([content], { type: mime });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+
+        // --------------------------------------------------------------------
+        // 6. CƠ SỞ DỮ LIỆU CÁC TUYẾN BUS MẪU
+        // --------------------------------------------------------------------
+        const PRESET_BUS_ROUTES = {
+            "19": {
+                name: "Tuyen_19_Ben_Thanh_DHQG",
+                number: "19",
+                stops: [
+                    { name: "Bến xe buýt Sài Gòn (Hàm Nghi)", coords: [106.702160, 10.771250] },
+                    { name: "Trạm ĐH KHXH&NV Q1 (Đinh Tiên Hoàng)", coords: [106.701380, 10.787120] },
+                    { name: "Trạm Cầu Sài Gòn (Xa Lộ Hà Nội)", coords: [106.726210, 10.799830] },
+                    { name: "Trạm Metro Thảo Điền", coords: [106.738500, 10.802100] },
+                    { name: "Trạm Ngã tư Bình Thái", coords: [106.765200, 10.835400] },
+                    { name: "Trạm Ngã tư Thủ Đức", coords: [106.772580, 10.849120] },
+                    { name: "Trạm Khu Công Nghệ Cao (SHTP)", coords: [106.784500, 10.858200] },
+                    { name: "Trạm ĐH Nông Lâm TP.HCM", coords: [106.790930, 10.869850] },
+                    { name: "Trạm KTX Khu A ĐHQG", coords: [106.799800, 10.878500] },
+                    { name: "Trạm ĐH Quốc Tế - ĐHQG", coords: [106.803200, 10.877800] },
+                    { name: "Trạm ĐH Bách Khoa CS2 (ĐHQG)", coords: [106.806200, 10.880500] },
+                    { name: "Trạm Bến xe Buýt Khu B ĐHQG", coords: [106.812300, 10.883200] }
+                ],
+                waypoints: [
+                    [106.702160, 10.771250],
+                    [106.701380, 10.787120],
+                    [106.726210, 10.799830],
+                    [106.772580, 10.849120],
+                    [106.790930, 10.869850],
+                    [106.803200, 10.877800],
+                    [106.812300, 10.883200]
+                ]
+            },
+            "33": {
+                name: "Tuyen_33_An_Suong_Suoi_Tien_DHQG",
+                number: "33",
+                stops: [
+                    { name: "Bến xe An Sương", coords: [106.618950, 10.846520] },
+                    { name: "Trạm Cầu vượt Quang Trung", coords: [106.634120, 10.852300] },
+                    { name: "Trạm Chợ Cầu", coords: [106.652100, 10.857200] },
+                    { name: "Trạm Ngã tư Ga", coords: [106.685300, 10.865100] },
+                    { name: "Trạm Chợ Đầu Mối Nông Sản Thủ Đức", coords: [106.727500, 10.869200] },
+                    { name: "Trạm Cầu Vượt Sóng Thần", coords: [106.748500, 10.874100] },
+                    { name: "Trạm ĐH Nông Lâm", coords: [106.790930, 10.869850] },
+                    { name: "Trạm KDL Suối Tiên", coords: [106.801200, 10.866500] },
+                    { name: "Trạm Bến xe Miền Đông Mới", coords: [106.815200, 10.875300] },
+                    { name: "Trạm KTX Khu B ĐHQG", coords: [106.812300, 10.883200] }
+                ],
+                waypoints: [
+                    [106.618950, 10.846520],
+                    [106.634120, 10.852300],
+                    [106.685300, 10.865100],
+                    [106.727500, 10.869200],
+                    [106.790930, 10.869850],
+                    [106.801200, 10.866500],
+                    [106.812300, 10.883200]
+                ]
+            },
+            "53": {
+                name: "Tuyen_53_Le_Hong_Phong_DHQG",
+                number: "53",
+                stops: [
+                    { name: "Bến xe Lê Hồng Phong (Q10)", coords: [106.677500, 10.763500] },
+                    { name: "Trạm BV Nhi Đồng 1", coords: [106.671200, 10.769800] },
+                    { name: "Trạm Vòng xoay Dân Chủ", coords: [106.682100, 10.777900] },
+                    { name: "Trạm Ngã tư Hàng Xanh", coords: [106.712100, 10.801200] },
+                    { name: "Trạm ĐH Quốc Tế - ĐHQG", coords: [106.803200, 10.877800] },
+                    { name: "Trạm ĐH Khoa Học Tự Nhiên CS2", coords: [106.800500, 10.876200] }
+                ],
+                waypoints: [
+                    [106.677500, 10.763500],
+                    [106.712100, 10.801200],
+                    [106.772580, 10.849120],
+                    [106.803200, 10.877800]
+                ]
+            },
+            "08": {
+                name: "Tuyen_08_Ben_Xe_Q8_DHQG",
+                number: "08",
+                stops: [
+                    { name: "Bến xe Quận 8", coords: [106.651200, 10.732100] },
+                    { name: "Trạm Cầu Chà Và", coords: [106.662100, 10.748500] },
+                    { name: "Trạm ĐH Sư Phạm TP.HCM", coords: [106.681200, 10.761200] },
+                    { name: "Trạm Ngã tư Thủ Đức", coords: [106.772580, 10.849120] },
+                    { name: "Trạm ĐH Bách Khoa CS2", coords: [106.806200, 10.880500] },
+                    { name: "Trạm KTX Khu A ĐHQG", coords: [106.799800, 10.878500] }
+                ],
+                waypoints: [
+                    [106.651200, 10.732100],
+                    [106.681200, 10.761200],
+                    [106.772580, 10.849120],
+                    [106.806200, 10.880500]
+                ]
+            },
+            "99": {
+                name: "Tuyen_99_Thanh_My_Loi_DHQG",
+                number: "99",
+                stops: [
+                    { name: "Chợ Thạnh Mỹ Lợi (TP. Thủ Đức)", coords: [106.775200, 10.765400] },
+                    { name: "Trạm ĐH Giao Thông Vận Tải CS2", coords: [106.786500, 10.843200] },
+                    { name: "Trạm ĐH Quốc Tế ĐHQG", coords: [106.803200, 10.877800] },
+                    { name: "Trạm KTX Khu B ĐHQG", coords: [106.812300, 10.883200] }
+                ],
+                waypoints: [
+                    [106.775200, 10.765400],
+                    [106.786500, 10.843200],
+                    [106.803200, 10.877800],
+                    [106.812300, 10.883200]
+                ]
+            }
+        };
+
+        async function loadPresetBusRoute() {
+            const selected = document.getElementById('busRouteSelect').value;
+            if (!selected || !PRESET_BUS_ROUTES[selected]) return;
+
+            clearAllGraphics();
+            const routeData = PRESET_BUS_ROUTES[selected];
+            currentRouteName = routeData.name;
+            currentRouteNumber = routeData.number || selected;
+            document.getElementById('customRouteName').value = currentRouteName;
+            document.getElementById('customRouteNumber').value = currentRouteNumber;
+
+            routeData.stops.forEach((st, idx) => {
+                addStopMarker(st.coords[1], st.coords[0], st.name, idx + 1);
+            });
+
+            keyWaypoints = routeData.waypoints ? [...routeData.waypoints] : [];
+            keyWaypoints.forEach((pt, i) => addWaypointMarker(pt[1], pt[0], i + 1));
+
+            await routeSnapRoad();
+            fitMapToRoute();
+            refreshExportView();
+        }
+
+        // Init
+        renderStopsListUI();
+        refreshExportView();
+    </script>
+</body>
+
+</html>
