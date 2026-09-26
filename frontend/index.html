@@ -772,6 +772,14 @@
                 latitude: curLat
               };
             }
+
+            // Tự động di chuyển cửa sổ Popup theo sát xe buýt khi xe đang lăn bánh
+            if (mapView && mapView.popup && mapView.popup.visible && mapView.popup.selectedFeature) {
+              const selectedF = mapView.popup.selectedFeature;
+              if (selectedF === g || (selectedF.attributes && selectedF.attributes.vehicle_id === vehId)) {
+                mapView.popup.location = g.geometry;
+              }
+            }
           });
 
           if (hasActiveAnim || Object.keys(busAnimStates).length > 0) {
@@ -836,6 +844,18 @@
             g.attributes.heading = data.heading || 0;
             g.attributes.route_id = data.route_id;
             g.attributes.route = rName;
+
+            // Làm mới nội dung thông số bên trong Popup nếu đang mở xem xe này
+            if (mapView && mapView.popup && mapView.popup.visible && mapView.popup.selectedFeature) {
+              const sf = mapView.popup.selectedFeature;
+              if (sf === g || (sf.attributes && sf.attributes.vehicle_id === data.vehicle_id)) {
+                sf.attributes.speed = data.speed_kmh;
+                sf.attributes.heading = data.heading || 0;
+                if (mapView.popup.viewModel && mapView.popup.viewModel.refresh) {
+                  mapView.popup.viewModel.refresh();
+                }
+              }
+            }
 
             if (!isAnimatingFleet) {
               isAnimatingFleet = true;
