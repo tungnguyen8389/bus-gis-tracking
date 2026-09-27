@@ -1004,6 +1004,7 @@
     let currentDirection = 1;
     let mapView, routeLayer, stopsLayer, fleetLayer, GraphicClass, PointClass;
     let socketInstance = null;
+    let selectedTrackedVehicleId = null;
     const busGraphics = {};
 
     // --------------------------------------------------------------------
@@ -1296,6 +1297,18 @@
       fleetLayer = new GraphicsLayer({ title: "Đội xe buýt Realtime" });
       map.addMany([routeLayer, stopsLayer, fleetLayer]);
 
+      // Lắng nghe sự kiện click chọn xe trên bản đồ
+      mapView.on("click", function(event) {
+        mapView.hitTest(event).then(function(response) {
+          const busResult = response.results.find(r => r.graphic && r.graphic.layer === fleetLayer);
+          if (busResult && busResult.graphic && busResult.graphic.attributes) {
+            selectedTrackedVehicleId = busResult.graphic.attributes.vehicle_id;
+            const plate = busResult.graphic.attributes.plate || busResult.graphic.attributes.vehicle_id;
+            showToast(`🎯 Đang theo dõi xe buýt: ${plate}`, "info");
+          }
+        });
+      });
+
       // 3. Kiểm tra đăng nhập
       checkAuthOnStartup();
     });
@@ -1347,6 +1360,7 @@
     async function onRouteChanged() {
       const select = document.getElementById("routeSelect");
       currentSelectedRoute = select.value;
+      selectedTrackedVehicleId = null;
       const dirGroup = document.getElementById("directionGroup");
 
       if (currentSelectedRoute === "ALL") {
@@ -1623,31 +1637,38 @@
             return;
           }
 
-          // Cập nhật thông số Bảng điều khiển nổi bên phải
-          const rObj = allRoutes.find(r => r.route_id === data.route_id);
-          const rName = rObj ? `Tuyến ${rObj.route_number}` : (data.route_id || "Tuyến xe");
-          const busRouteEl = document.getElementById("busRouteName");
-          if (busRouteEl) busRouteEl.innerText = rName;
-          const busPlateEl = document.getElementById("busPlate");
-          if (busPlateEl) busPlateEl.innerText = data.plate_number || data.vehicle_id;
-          const busSpeedEl = document.getElementById("busSpeed");
-          if (busSpeedEl) busSpeedEl.innerText = data.speed_kmh || 0;
-          const busCoordEl = document.getElementById("busCoord");
-          if (busCoordEl) busCoordEl.innerText = `[${data.longitude.toFixed(4)}, ${data.latitude.toFixed(4)}]`;
+          // Nếu chưa có xe theo dõi hoặc xe cũ không còn thuộc tuyến, tự động gán xe đầu tiên
+          if (!selectedTrackedVehicleId || (busGraphics[selectedTrackedVehicleId] && !busGraphics[selectedTrackedVehicleId].visible)) {
+            selectedTrackedVehicleId = data.vehicle_id;
+          }
 
-          // Tính toán trạm tiếp theo sắp tới (Trạm gần nhất phía trước)
-          if (currentRawStops.length > 0) {
-            let nextStop = currentRawStops[0].stop_name;
-            let minDistance = Infinity;
-            currentRawStops.forEach(st => {
-              const dist = Math.hypot(st.longitude - data.longitude, st.latitude - data.latitude);
-              if (dist < minDistance) {
-                minDistance = dist;
-                nextStop = st.stop_name;
-              }
-            });
-            const nextStopEl = document.getElementById("nextStopName");
-            if (nextStopEl) nextStopEl.innerText = nextStop;
+          // Cập nhật thông số Bảng điều khiển nổi bên phải CHỈ CHO XE ĐANG ĐƯỢC CHỌN THEO DÕI
+          if (data.vehicle_id === selectedTrackedVehicleId) {
+            const rObj = allRoutes.find(r => r.route_id === data.route_id);
+            const rName = rObj ? `Tuyến ${rObj.route_number}` : (data.route_id || "Tuyến xe");
+            const busRouteEl = document.getElementById("busRouteName");
+            if (busRouteEl) busRouteEl.innerText = rName;
+            const busPlateEl = document.getElementById("busPlate");
+            if (busPlateEl) busPlateEl.innerText = data.plate_number || data.vehicle_id;
+            const busSpeedEl = document.getElementById("busSpeed");
+            if (busSpeedEl) busSpeedEl.innerText = data.speed_kmh || 0;
+            const busCoordEl = document.getElementById("busCoord");
+            if (busCoordEl) busCoordEl.innerText = `[${data.longitude.toFixed(4)}, ${data.latitude.toFixed(4)}]`;
+
+            // Tính toán trạm tiếp theo sắp tới CHUẨN XÁC cho xe đang theo dõi này
+            if (currentRawStops.length > 0) {
+              let nextStop = currentRawStops[0].stop_name;
+              let minDistance = Infinity;
+              currentRawStops.forEach(st => {
+                const dist = Math.hypot(st.longitude - data.longitude, st.latitude - data.latitude);
+                if (dist < minDistance) {
+                  minDistance = dist;
+                  nextStop = st.stop_name;
+                }
+              });
+              const nextStopEl = document.getElementById("nextStopName");
+              if (nextStopEl) nextStopEl.innerText = nextStop;
+            }
           }
 
           if (busGraphics[data.vehicle_id]) {
