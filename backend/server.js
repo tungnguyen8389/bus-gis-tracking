@@ -163,9 +163,9 @@ app.post("/api/v1/auth/login", async (req, res) => {
   }
 });
 
-// Đăng ký tài khoản mới
+// Đăng ký tài khoản mới (Mặc định cố định quyền VIEWER cho người dùng công khai)
 app.post("/api/v1/auth/register", async (req, res) => {
-  const { username, password, full_name, email, role } = req.body;
+  const { username, password, full_name, email } = req.body;
   if (!username || !password || !full_name) {
     return res.status(400).json({ error: "Vui lòng điền đầy đủ các thông tin bắt buộc" });
   }
@@ -178,7 +178,8 @@ app.post("/api/v1/auth/register", async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
-    const assignedRole = (role === "ADMIN" || role === "MANAGER" || role === "VIEWER") ? role : "MANAGER";
+    // Luôn cố định vai trò VIEWER đối với đăng ký công khai, tránh nguy cơ Privilege Escalation
+    const assignedRole = "VIEWER";
 
     const [result] = await dbPool.query(
       "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
