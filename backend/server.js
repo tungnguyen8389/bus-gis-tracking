@@ -351,6 +351,37 @@ app.delete("/api/v1/routes/:route_id", authenticateToken, async (req, res) => {
 // 4. ROUTE PATHS & COORDINATES (TỌA ĐỘ TIM ĐƯỜNG)
 // --------------------------------------------------------------------
 
+// Lấy toàn bộ lộ trình tim đường của tất cả các tuyến (GeoJSON FeatureCollection)
+app.get("/api/v1/paths", async (req, res) => {
+  try {
+    const [rows] = await dbPool.query(
+      `SELECT p.path_id, p.route_id, p.direction, r.route_number, r.route_name,
+              ST_AsGeoJSON(p.geom) AS geom_json
+       FROM route_paths p
+       JOIN bus_routes r ON p.route_id = r.route_id
+       ORDER BY p.route_id ASC, p.direction ASC`
+    );
+
+    const geojson = {
+      type: "FeatureCollection",
+      features: rows.map(row => ({
+        type: "Feature",
+        geometry: JSON.parse(row.geom_json),
+        properties: {
+          path_id: row.path_id,
+          route_id: row.route_id,
+          route_number: row.route_number,
+          route_name: row.route_name,
+          direction: row.direction
+        }
+      }))
+    };
+    res.json(geojson);
+  } catch (error) {
+    res.status(500).json({ error: "Lỗi truy vấn toàn bộ lộ trình tim đường" });
+  }
+});
+
 // Lấy lộ trình tim đường (Polyline) theo route_id dạng GeoJSON
 app.get("/api/v1/routes/:route_id/path", async (req, res) => {
   const { route_id } = req.params;
