@@ -60,6 +60,32 @@ async function initDatabase() {
         console.log(">>> [Database] Đã khởi tạo cấu trúc CSDL thành công!");
       }
     }
+
+    // Đảm bảo có tài khoản khách mặc định (role VIEWER)
+    try {
+      const [khachUsers] = await conn.query("SELECT user_id FROM users WHERE username = 'khach'");
+      if (khachUsers.length === 0) {
+        const salt = await bcrypt.genSalt(10);
+        const khachHash = await bcrypt.hash("khach123", salt);
+        await conn.query(
+          "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
+          ["khach", khachHash, "Khách Tham Quan", "khach@busgis.vn", "VIEWER"]
+        );
+        console.log(">>> [Database] Đã tạo tài khoản khách mặc định: khach / khach123 (Role: VIEWER)");
+      }
+
+      const [viewerUsers] = await conn.query("SELECT user_id FROM users WHERE username = 'viewer'");
+      if (viewerUsers.length === 0) {
+        const salt = await bcrypt.genSalt(10);
+        const viewerHash = await bcrypt.hash("viewer123", salt);
+        await conn.query(
+          "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
+          ["viewer", viewerHash, "Người dùng Viewer", "viewer@busgis.vn", "VIEWER"]
+        );
+      }
+    } catch (uErr) {
+      console.warn(">>> [Database] Kiểm tra tài khoản người dùng:", uErr.message);
+    }
     conn.release();
   } catch (err) {
     console.warn(">>> [Database Cảnh báo] Kiểm tra CSDL:", err.message);

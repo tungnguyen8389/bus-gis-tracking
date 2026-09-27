@@ -104,10 +104,12 @@ CREATE TABLE vehicle_tracking_logs (
 -- SEED DỮ LIỆU MẪU KHU VỰC ĐẠI HỌC QUỐC GIA TP.HCM
 -- ====================================================================
 
--- Nạp Tài khoản Quản trị mẫu (Mật khẩu mặc định: admin123 / manager123)
+-- Nạp Tài khoản Quản trị & Người dùng Khách mẫu (Mật khẩu: admin123 / manager123 / khach123)
 INSERT INTO users (username, password_hash, full_name, email, role) VALUES
 ('admin', '$2b$10$be/YCW2AyTX1gvBhWxR5cOS1Ge1cKIogArSfSYQ.Aj79eofoXleWK', 'Quản trị viên Hệ thống', 'admin@busgis.vn', 'ADMIN'),
-('manager', '$2b$10$PuxC1Sqo0DlyCRYGpQj8buYs8D0JMXfx.921s1thBPsbnW1aIS7Om', 'Quản lý Điều hành', 'manager@busgis.vn', 'MANAGER');
+('manager', '$2b$10$PuxC1Sqo0DlyCRYGpQj8buYs8D0JMXfx.921s1thBPsbnW1aIS7Om', 'Quản lý Điều hành', 'manager@busgis.vn', 'MANAGER'),
+('khach', '$2b$10$wN9F4G2rNqFp3H7qN8V4.OSgYf81K7nFzL73jJb0qW12L90M81L4.', 'Khách Tham Quan', 'khach@busgis.vn', 'VIEWER'),
+('viewer', '$2b$10$wN9F4G2rNqFp3H7qN8V4.OSgYf81K7nFzL73jJb0qW12L90M81L4.', 'Người dùng Viewer', 'viewer@busgis.vn', 'VIEWER');
 
 -- Nạp Danh sách Tuyến xe buýt
 INSERT INTO bus_routes (route_id, route_number, route_name, distance_km, headway_min) VALUES
