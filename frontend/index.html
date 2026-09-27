@@ -1530,11 +1530,19 @@
         });
 
         // --------------------------------------------------------------------
-        // BỘ ĐIỀU KHIỂN HOẠT HỌA XE BUÝT 60 FPS SIÊU MƯỢT (REALTIME INTERPOLATION)
+        // BỘ ĐIỀU KHIỂN HOẠT HỌA XE BUÝT 60 FPS SIÊU MƯỢT (NATIVE WEB MERCATOR)
         // --------------------------------------------------------------------
         const busAnimStates = {};
         const busCurrentPositions = {};
         let isAnimatingFleet = false;
+
+        // Hàm chuyển đổi siêu tốc WGS84 -> Web Mercator (WKID 3857) để render trực tiếp trên WebGL không qua tầng reprojection
+        function toWebMercator(lon, lat) {
+          const x = (lon * 20037508.34) / 180;
+          let y = Math.log(Math.tan(((90 + lat) * Math.PI) / 360)) / (Math.PI / 180);
+          y = (y * 20037508.34) / 180;
+          return [x, y];
+        }
 
         function animateFleetMovement() {
           const now = performance.now();
@@ -1568,27 +1576,30 @@
             anim.curLat = curLat;
             busCurrentPositions[vehId] = { lon: curLon, lat: curLat };
 
-            // Cập nhật vị trí Graphic trên bản đồ ArcGIS
+            // Render trực tiếp trên không gian tọa độ gốc của MapView (Web Mercator)
+            const [mx, my] = toWebMercator(curLon, curLat);
             if (PointClass) {
               g.geometry = new PointClass({
-                x: curLon,
-                y: curLat,
-                spatialReference: { wkid: 4326 }
+                x: mx,
+                y: my,
+                spatialReference: { wkid: 3857 }
               });
             } else {
               g.geometry = {
                 type: "point",
-                x: curLon,
-                y: curLat,
-                spatialReference: { wkid: 4326 }
+                x: mx,
+                y: my,
+                spatialReference: { wkid: 3857 }
               };
             }
 
-            // Tự động di chuyển Popup theo xe nếu người dùng đang click theo dõi xe này
+            // Tự động di chuyển Popup theo xe (tạm dừng khi người dùng đang zoom/pan để tránh giật camera)
             if (mapView && mapView.popup && mapView.popup.visible && mapView.popup.selectedFeature) {
               const sf = mapView.popup.selectedFeature;
               if (sf === g || (sf.attributes && sf.attributes.vehicle_id === vehId)) {
-                mapView.popup.location = g.geometry;
+                if (!mapView.interacting && !mapView.navigating) {
+                  mapView.popup.location = g.geometry;
+                }
               }
             }
           });
@@ -1666,8 +1677,9 @@
 
             if (isTeleport) {
               busCurrentPositions[data.vehicle_id] = { lon: data.longitude, lat: data.latitude };
+              const [mx, my] = toWebMercator(data.longitude, data.latitude);
               if (PointClass) {
-                g.geometry = new PointClass({ x: data.longitude, y: data.latitude, spatialReference: { wkid: 4326 } });
+                g.geometry = new PointClass({ x: mx, y: my, spatialReference: { wkid: 3857 } });
               }
             }
 
@@ -1693,8 +1705,9 @@
               requestAnimationFrame(animateFleetMovement);
             }
           } else {
+            const [mx, my] = toWebMercator(data.longitude, data.latitude);
             const busGraphic = new GraphicClass({
-              geometry: { type: "point", x: data.longitude, y: data.latitude, spatialReference: { wkid: 4326 } },
+              geometry: { type: "point", x: mx, y: my, spatialReference: { wkid: 3857 } },
               symbol: {
                 type: "simple-marker",
                 color: [255, 59, 48], // Đỏ nổi bật
