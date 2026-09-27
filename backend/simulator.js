@@ -243,9 +243,9 @@ async function loadDataFromDatabase() {
 }
 
 // --------------------------------------------------------------------
-// TIẾN TRÌNH PHÁT TỌA ĐỘ GPS NỘI SUY MƯỢT MỖI 1 GIÂY
+// TIẾN TRÌNH PHÁT TỌA ĐỘ GPS NỘI SUY MƯỢT MỖI 500MS (2 LẦN/GIÂY)
 // --------------------------------------------------------------------
-const TICK_INTERVAL_MS = 1000; // Phát mỗi 1 giây (1000ms) để di chuyển cực kỳ mượt mà
+const TICK_INTERVAL_MS = 500; // Phát mỗi 500ms để di chuyển cực kỳ mượt mà liên tục
 
 async function startSimulator() {
   await loadDataFromDatabase();
