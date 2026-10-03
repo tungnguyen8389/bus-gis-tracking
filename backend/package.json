@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "simulate": "node simulator.js",
-    "seed:busdata": "node scripts/seed_busdata.js"
+    "db:export": "node scripts/export_busdata_sql.js",
+    "db:import": "node scripts/import_busdata_sql.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

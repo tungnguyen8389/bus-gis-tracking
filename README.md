@@ -10,10 +10,11 @@ Dự án môn Hệ Thống Thông Tin Địa Lý (IE402) - Ứng dụng công ng
 Bus_project/
 ├── database/
 │   ├── schema.sql                  # Lược đồ CSDL Spatial (tạo bảng + tài khoản người dùng)
+│   ├── busdata.sql                 # Dữ liệu tuyến/trạm/lộ trình hiện hành (sinh bởi npm run db:export)
 │   ├── migrations/
 │   │   └── 001_busdata_schema.sql  # Nâng cấp CSDL cũ để chứa dữ liệu busdata (MariaDB)
-│   ├── busdata/                    # Dữ liệu xe buýt TP.HCM: routes.json, routes.geojson,
-│   │                               # stops.geojson, route_stops.json
+│   ├── busdata/                    # Dữ liệu gốc TP.HCM (chỉ tham khảo, đã chuyển thành busdata.sql):
+│   │                               # routes.json, routes.geojson, stops.geojson, route_stops.json
 │   └── backup/                     # Bản sao lưu CSDL (không commit — chứa hash mật khẩu)
 ├── backend/
 │   ├── .env                        # File cấu hình môi trường (Port, DB connection)
@@ -21,7 +22,9 @@ Bus_project/
 │   ├── server.js                   # REST API GeoJSON & Socket.io Realtime Hub
 │   ├── simulator.js                # Bộ phát GPS giả lập lộ trình xe buýt
 │   └── scripts/
-│       └── seed_busdata.js         # Nạp database/busdata vào CSDL (npm run seed:busdata)
+│       ├── export_busdata_sql.js   # CSDL → database/busdata.sql (npm run db:export)
+│       ├── import_busdata_sql.js   # database/busdata.sql → CSDL (npm run db:import)
+│       └── busdata_db.js           # Kết nối CSDL dùng chung cho 2 script trên
 ├── docs/
 │   ├── DATABASE_SPECIFICATION.md   # Đặc tả CSDL không gian, từ điển dữ liệu, nguồn dữ liệu
 │   ├── KIEN_TRUC_HE_THONG.md       # Đặc tả kiến trúc hệ thống
@@ -85,10 +88,18 @@ npm start
 ### 3. Nạp dữ liệu xe buýt TP.HCM
 ```bash
 cd backend
-npm run seed:busdata
+npm run db:import
 ```
-* Nạp 178 tuyến, 5.898 trạm, 332 lộ trình và 13.772 liên kết trạm–tuyến từ `database/busdata/`.
-* Script **xóa toàn bộ** tuyến/trạm/lộ trình/xe/lịch chạy/nhật ký GPS hiện có (giữ nguyên tài khoản người dùng) rồi nạp lại; chạy lại nhiều lần cho cùng kết quả.
+* Nạp 178 tuyến, 5.898 trạm, 332 lộ trình và 13.772 liên kết trạm–tuyến từ `database/busdata.sql`.
+* Script **thay toàn bộ** 4 bảng `bus_routes`, `bus_stops`, `route_paths`, `route_stops` (giữ nguyên users, xe, lịch chạy). Cả file chạy trong 1 transaction: lỗi giữa chừng thì dữ liệu cũ giữ nguyên.
+
+**Sau khi sửa lộ trình / trạm trên công cụ kéo thả**, ghi dữ liệu hiện tại của CSDL ngược vào file rồi commit:
+```bash
+cd backend
+npm run db:export        # ghi đè database/busdata.sql
+git diff --stat database/busdata.sql
+```
+File sắp xếp cố định, mỗi dòng một bản ghi, nên `git diff` chỉ hiện đúng các tuyến / trạm đã sửa.
 
 ### 4. Khởi động Bộ giả lập GPS xe buýt (tùy chọn)
 Mở một cửa sổ Terminal mới:
@@ -104,5 +115,5 @@ python3 -m http.server 8080 --directory frontend
 ```
 * **Giao diện Bản đồ Giám sát Real-time:** `http://localhost:8080/`
 * **Trang Quản trị Hệ thống (Admin Portal):** `http://localhost:8080/admin.html`
-* **Công cụ sửa lộ trình (kéo thả):** `http://localhost:8080/path-editor.html?route_id=<route_id>&direction=1` — mở từ nút <i>Sửa trên bản đồ</i> ở tab Tuyến xe. Lưu ý: chạy lại `npm run seed:busdata` sẽ ghi đè mọi chỉnh sửa.
+* **Công cụ sửa lộ trình (kéo thả):** `http://localhost:8080/path-editor.html?route_id=<route_id>&direction=1` — mở từ nút <i>Sửa trên bản đồ</i> ở tab Tuyến xe. Chỉnh sửa lưu vào CSDL; chạy `npm run db:export` để ghi vào `database/busdata.sql`.
 * **Công cụ chuyển tọa độ Google Maps:** `tools/google_maps_importer.html`

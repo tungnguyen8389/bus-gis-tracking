@@ -112,8 +112,8 @@ CREATE TABLE vehicle_tracking_logs (
 -- ====================================================================
 -- SEED TÀI KHOẢN NGƯỜI DÙNG
 -- ====================================================================
--- Dữ liệu tuyến / trạm / lộ trình TP.HCM được nạp riêng từ database/busdata:
---   cd backend && npm run seed:busdata
+-- Dữ liệu tuyến / trạm / lộ trình TP.HCM được nạp riêng từ database/busdata.sql:
+--   cd backend && npm run db:import
 
 -- Nạp Tài khoản Quản trị & Người dùng Khách mẫu (Mật khẩu: admin123 / manager123 / khach123)
 INSERT INTO users (username, password_hash, full_name, email, role) VALUES

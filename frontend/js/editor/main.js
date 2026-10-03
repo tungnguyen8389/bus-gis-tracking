@@ -234,7 +234,7 @@ async function saveEdits() {
   savedSnapshot = saved;
   isSaving = false;
   refreshAnalysis(savedSnapshot);
-  updateEditorStatus(errors.length ? "Lỗi lưu " + errors.join("; ") : "Đã lưu ✓");
+  updateEditorStatus(errors.length ? "Lỗi lưu " + errors.join("; ") : "Đã lưu vào CSDL ✓ — chạy npm run db:export để ghi vào database/busdata.sql");
 }
 
 initEditor();

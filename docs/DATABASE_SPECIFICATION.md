@@ -7,16 +7,39 @@
 
 ## 1. TỔNG QUAN HỆ THỐNG CƠ SỞ DỮ LIỆU KHÔNG GIAN
 
-* **Hệ quản trị CSDL:** MySQL 8.x Spatial / MariaDB Spatial (Storage Engine: `InnoDB` hỗ trợ giao dịch ACID và Spatial Index).
+* **Hệ quản trị CSDL:** **MariaDB 10.4 Spatial** (môi trường triển khai: Docker container `bus-gis-mariadb`), Storage Engine `InnoDB` hỗ trợ giao dịch ACID và Spatial Index. File `database/schema.sql` tương thích cả MySQL 8.x; riêng migration `database/migrations/001_busdata_schema.sql` dùng cú pháp chỉ có trên MariaDB.
 * **Tên CSDL:** `bus_management_db`
 * **Bộ mã ký tự (Charset / Collation):** `utf8mb4` / `utf8mb4_unicode_ci` (hỗ trợ tiếng Việt có dấu và ký tự đa ngôn ngữ).
 * **Hệ quy chiếu tọa độ không gian (CRS - Coordinate Reference System):** 
   * **WGS84 (World Geodetic System 1984)** - Mã định danh chuẩn: **EPSG:4326** / **SRID 4326**.
-  * Quy ước trục trắc địa phẳng: **`axis-order=long-lat`** (Kinh độ `longitude` từ $106.7^\circ - 106.9^\circ\text{ E}$ đứng trước, Vĩ độ `latitude` từ $10.7^\circ - 10.9^\circ\text{ N}$ đứng sau).
+  * Quy ước trục trắc địa phẳng: **`axis-order=long-lat`** (Kinh độ `longitude` đứng trước, Vĩ độ `latitude` đứng sau).
+  * Phạm vi dữ liệu thực tế: Kinh độ $106.09^\circ - 107.55^\circ\text{ E}$, Vĩ độ $8.68^\circ - 11.52^\circ\text{ N}$ (toàn mạng lưới TP.HCM, bao gồm cả các trạm tại Côn Đảo).
 * **Chuẩn biểu diễn đối tượng địa lý:** Tuân thủ tiêu chuẩn **OGC SFA (OpenGIS Simple Feature Access)**:
   * Kiểu đối tượng điểm: `POINT(lon lat)` đại diện cho vị trí trạm dừng và vết GPS động của xe.
   * Kiểu đối tượng đường: `LINESTRING(lon1 lat1, lon2 lat2, ...)` đại diện cho quỹ đạo tim đường tuyến xe.
   * Định dạng trao đổi dữ liệu: **GeoJSON (RFC 7946)** thông qua hàm chuẩn hóa `ST_AsGeoJSON()` phục vụ hiển thị trên ArcGIS Maps SDK for JavaScript.
+
+### 1.1. Nguồn dữ liệu
+
+Dữ liệu mạng lưới xe buýt là dữ liệu thực tế của TP.HCM. Nguồn hiện hành là file `database/busdata.sql`, nạp bằng `cd backend && npm run db:import`. Sau khi chỉnh sửa lộ trình / trạm trên `frontend/path-editor.html`, chạy `npm run db:export` để ghi CSDL ngược vào file này.
+
+Ban đầu dữ liệu được chuyển đổi **một lần** từ các file JSON gốc trong `database/busdata/` (giữ lại để tham khảo) theo bảng và quy tắc dưới đây. Script chuyển đổi JSON đã được gỡ bỏ; không nạp lại từ JSON vì sẽ mất các chỉnh sửa.
+
+| File nguồn | Nội dung | Bảng đích | Số bản ghi nạp |
+|---|---|---|---|
+| `routes.json` | Thông tin tuyến và các lượt (variant) | `bus_routes` | 178 |
+| `stops.geojson` | Điểm trạm dừng (`Point`) | `bus_stops` | 5.898 |
+| `routes.geojson` | Tim đường theo lượt (`LineString`) | `route_paths` | 332 |
+| `route_stops.json` | Thứ tự trạm theo lượt (`"RouteId_RouteVarId": [StopId, ...]`) | `route_stops` | 13.772 |
+
+**Quy tắc chuyển đổi khi nạp:**
+* `route_id` / `stop_id` giữ nguyên mã số gốc của nguồn dưới dạng chuỗi (ví dụ tuyến `4`, trạm `35`).
+* `distance_km` = `Distance` (mét) / 1000; `headway_min` = số đầu tiên trong chuỗi `Headway` (`"10 - 20"` → `10`; thiếu → `15`), chuỗi gốc lưu ở `headway_text`.
+* `direction` = `1` nếu lượt có `Outbound = true`, ngược lại `2`.
+* `address` ghép từ `AddressNo, Street, Ward, Zone`.
+* Khử các điểm tọa độ trùng liên tiếp trong lộ trình (đã loại 32.012 điểm).
+* Không nạp 3 lượt phụ cùng chiều đi của các tuyến du lịch DL01, DL02, DL05 (lượt `336_2`, `371_2`, `406_2` — chỉ khác khung giờ chạy), để mỗi tuyến có tối đa một lộ trình cho mỗi chiều.
+* Script chạy trong một transaction: xóa dữ liệu tuyến/trạm/xe/lịch cũ (giữ nguyên bảng `users`) rồi nạp lại, chạy lại nhiều lần cho cùng kết quả.
 
 ---
 
@@ -37,11 +60,15 @@ flowchart TD
     subgraph ROW1 [" "]
         direction LR
         T_ROUTES["<b>bus_routes</b> (Danh mục Tuyến buýt)<hr/>
-        <b>string</b> &nbsp; <b>route_id (PK)</b> : Mã tuyến (BUS_01...)<br/>
-        <b>string</b> &nbsp; route_number : Số hiệu xe (08, 10, 53)<br/>
+        <b>string</b> &nbsp; <b>route_id (PK)</b> : Mã tuyến (4, 336...)<br/>
+        <b>string</b> &nbsp; route_number : Số hiệu tuyến (01, 61-37, DL01)<br/>
         <b>string</b> &nbsp; route_name : Tên lộ trình tuyến buýt<br/>
         <b>float</b> &nbsp;&nbsp;&nbsp; distance_km : Cự ly toàn tuyến (km)<br/>
-        <b>int</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; headway_min : Giãn cách chuyến (phút)"]:::tblBody
+        <b>int</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; headway_min : Giãn cách chuyến (phút)<br/>
+        <b>string</b> &nbsp; route_type : Loại hình tuyến<br/>
+        <b>string</b> &nbsp; color : Màu nhận diện tuyến<br/>
+        <b>string</b> &nbsp; operation_time : Giờ hoạt động<br/>
+        <b>string</b> &nbsp; headway_text : Giãn cách gốc (8 - 20)"]:::tblBody
 
         T_PATHS["<b>route_paths</b> (Lộ trình Tim đường GIS)<hr/>
         <b>int</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>path_id (PK)</b> : Mã lộ trình tự tăng<br/>
@@ -56,16 +83,19 @@ flowchart TD
     subgraph ROW2 [" "]
         direction LR
         T_STOPS["<b>bus_stops</b> (Trạm dừng xe buýt GIS)<hr/>
-        <b>string</b> &nbsp; <b>stop_id (PK)</b> : Mã trạm (ST_01...)<br/>
+        <b>string</b> &nbsp; <b>stop_id (PK)</b> : Mã trạm (35, 8206...)<br/>
+        <b>string</b> &nbsp; stop_code : Mã trạm nghiệp vụ (BX 01, Q1 190)<br/>
         <b>string</b> &nbsp; stop_name : Tên trạm dừng đón/trả<br/>
         <b>string</b> &nbsp; address : Địa chỉ / Tuyến đường<br/>
+        <b>string</b> &nbsp; stop_type : Loại trạm (Nhà chờ, Trụ dừng...)<br/>
+        <b>string</b> &nbsp; status : Trạng thái khai thác<br/>
         <b>point</b> &nbsp;&nbsp; geom : SRID 4326 Spatial (Tọa độ trạm)"]:::tblSpatial
 
         T_ROUTE_STOPS["<b>route_stops</b> (Liên kết Tuyến - Trạm)<hr/>
         <b>string</b> &nbsp; <b>route_id (PK,FK)</b> : Mã tuyến<br/>
-        <b>string</b> &nbsp; <b>stop_id (PK,FK)</b> : Mã trạm dừng<br/>
         <b>tinyint</b> <b>direction (PK)</b> : Chiều (1: Đi, 2: Về)<br/>
-        <b>int</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; stop_order : Thứ tự ghé trạm (1, 2, 3...)"]:::tblBody
+        <b>int</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>stop_order (PK)</b> : Thứ tự ghé trạm (1, 2, 3...)<br/>
+        <b>string</b> &nbsp; <b>stop_id (FK)</b> : Mã trạm dừng"]:::tblBody
     end
 
     %% ==========================================
@@ -138,16 +168,17 @@ Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn
 ### 1. Quan hệ giữa Tuyến xe buýt và Lộ trình Tim đường (`bus_routes` – `route_paths`): Quan hệ $1 - N$
 * **Bản chất nghiệp vụ:** Mỗi một tuyến xe buýt (`bus_routes`) trong thực tế vận hành có ít nhất hai hướng di chuyển độc lập: *Lượt đi (Outbound - Direction 1)* và *Lượt về (Inbound - Direction 2)* với quỹ đạo tim đường số hóa khác nhau do cấu trúc đường một chiều hoặc luồng phân làn giao thông đô thị.
 * **Cơ chế liên kết khóa:** Trường `route_id` trong bảng `route_paths` đóng vai trò là Khóa ngoại (Foreign Key) tham chiếu trực tiếp đến Khóa chính `route_id` của bảng `bus_routes`.
-* **Ràng buộc toàn vẹn:** Thiết lập quy tắc **`ON DELETE CASCADE`** và **`ON UPDATE CASCADE`**. Khi một tuyến xe bị xóa hoặc điều chỉnh mã định danh trong hệ thống, toàn bộ các đối tượng hình học tim đường (`LINESTRING`) thuộc tuyến đó sẽ tự động được xóa/cập nhật đồng bộ, tránh phát sinh dữ liệu mồ côi (orphan records).
+* **Ràng buộc toàn vẹn:** Thiết lập quy tắc **`ON DELETE CASCADE`**. Khi một tuyến xe bị xóa khỏi hệ thống, toàn bộ các đối tượng hình học tim đường (`LINESTRING`) thuộc tuyến đó sẽ tự động bị xóa đồng bộ, tránh phát sinh dữ liệu mồ côi (orphan records).
 
 ### 2. Quan hệ giữa Tuyến xe buýt và Trạm dừng đón/trả (`bus_routes` – `bus_stops`): Quan hệ $M - N$ thông qua bảng `route_stops`
 * **Bản chất nghiệp vụ:**
   * Một tuyến xe buýt đi qua và dừng đón/trả khách tại nhiều trạm dừng khác nhau trong hành trình ($1 \text{ Tuyến} \rightarrow N \text{ Trạm}$).
-  * Ngược lại, một trạm dừng (ví dụ: *Trạm Thư viện Trung tâm ĐHQG*) có vị trí cố định nhưng đóng vai trò là điểm trung chuyển phục vụ cho nhiều tuyến xe buýt khác nhau cùng khai thác ($1 \text{ Trạm} \rightarrow N \text{ Tuyến}$).
+  * Ngược lại, một trạm dừng (ví dụ: *Bến xe buýt Sài Gòn* phục vụ hơn 30 tuyến) có vị trí cố định nhưng đóng vai trò là điểm trung chuyển phục vụ cho nhiều tuyến xe buýt khác nhau cùng khai thác ($1 \text{ Trạm} \rightarrow N \text{ Tuyến}$).
 * **Giải pháp chuẩn hóa:** Sử dụng bảng liên kết trung gian **`route_stops`** để tách quan hệ Nhiều – Nhiều ($M - N$) thành hai quan hệ Một – Nhiều ($1 - N$):
   * `bus_routes` $\xrightarrow{1 : N}$ `route_stops` (thông qua khóa ngoại `route_id`).
   * `bus_stops` $\xrightarrow{1 : N}$ `route_stops` (thông qua khóa ngoại `stop_id`).
-* **Thuộc tính quan hệ:** Khóa chính tổng hợp bao gồm bộ ba `(route_id, stop_id, direction)` nhằm xác định duy nhất sự xuất hiện của một trạm trên một chiều tuyến cụ thể. Đồng thời, trường thuộc tính **`stop_order`** ($1, 2, 3, \dots, n$) quy định thứ tự ghé trạm tuần tự, giúp hệ thống dựng được chuỗi lộ trình đón khách chính xác trên bản đồ.
+* **Thuộc tính quan hệ:** Khóa chính tổng hợp bao gồm bộ ba `(route_id, direction, stop_order)`: mỗi vị trí ghé trạm trên một chiều tuyến là duy nhất. Trường **`stop_order`** ($1, 2, 3, \dots, n$) quy định thứ tự ghé trạm tuần tự, giúp hệ thống dựng được chuỗi lộ trình đón khách chính xác trên bản đồ.
+* **Tuyến vòng:** Vì `stop_id` không nằm trong khóa chính, một trạm có thể xuất hiện nhiều lần trên cùng một chiều tuyến (ví dụ tuyến `345` ghé trạm `8206` ở thứ tự 1 và 18). Dữ liệu thực tế có 27 lượt tuyến như vậy.
 
 ### 3. Quan hệ Điều phối Lịch trình Chuyến xe (`bus_routes` – `vehicles` – `schedules`): Quan hệ $1 - N$ đa diện
 * **Bản chất nghiệp vụ:** Biểu đồ lịch trình (`schedules`) là thực thể giao tác liên kết giữa Tuyến đường khai thác và Phương tiện vận tải:
@@ -171,12 +202,12 @@ Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn
 
 | Bảng Cha (Parent Table) | Bảng Con (Child Table) | Khóa Ngoại (Foreign Key) | Loại Quan Hệ | Hành Vi Ràng Buộc (CASCADE / RESTRICT) |
 |---|---|---|:---:|---|
-| `bus_routes` | `route_paths` | `route_id` | $1 - N$ | `ON DELETE CASCADE`, `ON UPDATE CASCADE` |
-| `bus_routes` | `route_stops` | `route_id` | $1 - N$ | `ON DELETE CASCADE`, `ON UPDATE CASCADE` |
-| `bus_stops` | `route_stops` | `stop_id` | $1 - N$ | `ON DELETE CASCADE`, `ON UPDATE CASCADE` |
-| `bus_routes` | `schedules` | `route_id` | $1 - N$ | `ON DELETE CASCADE`, `ON UPDATE CASCADE` |
-| `vehicles` | `schedules` | `vehicle_id` | $1 - N$ | `ON DELETE CASCADE`, `ON UPDATE CASCADE` |
-| `vehicles` | `vehicle_tracking_logs` | `vehicle_id` | $1 - N$ | `ON DELETE CASCADE`, `ON UPDATE CASCADE` |
+| `bus_routes` | `route_paths` | `route_id` | $1 - N$ | `ON DELETE CASCADE` |
+| `bus_routes` | `route_stops` | `route_id` | $1 - N$ | `ON DELETE CASCADE` |
+| `bus_stops` | `route_stops` | `stop_id` | $1 - N$ | `ON DELETE CASCADE` |
+| `bus_routes` | `schedules` | `route_id` | $1 - N$ | `ON DELETE CASCADE` |
+| `vehicles` | `schedules` | `vehicle_id` | $1 - N$ | `ON DELETE CASCADE` |
+| `vehicles` | `vehicle_tracking_logs` | `vehicle_id` | $1 - N$ | `ON DELETE CASCADE` |
 
 ---
 
@@ -202,11 +233,15 @@ Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn
 
 | Tên trường | Kiểu dữ liệu | Ràng buộc | Giá trị mặc định | Giải thích nghiệp vụ |
 |---|---|---|---|---|
-| `route_id` | `VARCHAR(20)` | `PRIMARY KEY` | Không | Mã định danh tuyến (ví dụ: `BUS_01`, `BUS_02`, `BUS_03`) |
-| `route_number` | `VARCHAR(10)` | `NOT NULL` | Không | Số hiệu nhận diện tuyến (ví dụ: `08`, `10`, `53`) |
-| `route_name` | `VARCHAR(150)` | `NOT NULL` | Không | Tên đầy đủ lộ trình (ví dụ: `Bến xe Buýt ĐHQG - Bến Thành`) |
+| `route_id` | `VARCHAR(20)` | `PRIMARY KEY` | Không | Mã định danh tuyến, giữ nguyên `RouteId` của nguồn (ví dụ: `4`, `336`) |
+| `route_number` | `VARCHAR(10)` | `NOT NULL` | Không | Số hiệu nhận diện tuyến (ví dụ: `01`, `61-37`, `DL01`) |
+| `route_name` | `VARCHAR(150)` | `NOT NULL` | Không | Tên đầy đủ lộ trình (ví dụ: `Bến Thành - Cộng Hòa - Bến xe An Sương`) |
 | `distance_km` | `FLOAT` | `NULL` | `0.0` | Tổng chiều dài cự ly tuyến tính bằng kilômét |
-| `headway_min` | `INT` | `NULL` | `15` | Thời gian giãn cách giữa 2 chuyến liên tiếp (phút) |
+| `headway_min` | `INT` | `NULL` | `15` | Thời gian giãn cách giữa 2 chuyến liên tiếp (phút), lấy giá trị nhỏ nhất của `headway_text` |
+| `route_type` | `VARCHAR(60)` | `NULL` | `NULL` | Loại hình tuyến (ví dụ: `Phổ thông - Có trợ giá`, `Không trợ giá - Du lịch`) |
+| `color` | `VARCHAR(9)` | `NULL` | `NULL` | Mã màu nhận diện tuyến (ví dụ: `#0504AA`) |
+| `operation_time` | `VARCHAR(30)` | `NULL` | `NULL` | Khung giờ hoạt động (ví dụ: `05:00 - 22:00`) |
+| `headway_text` | `VARCHAR(20)` | `NULL` | `NULL` | Giãn cách gốc theo nguồn (ví dụ: `8 - 20`) |
 
 ---
 
@@ -227,22 +262,26 @@ Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn
 
 | Tên trường | Kiểu dữ liệu | Ràng buộc | Giá trị mặc định | Giải thích nghiệp vụ |
 |---|---|---|---|---|
-| `stop_id` | `VARCHAR(20)` | `PRIMARY KEY` | Không | Mã định danh trạm dừng (ví dụ: `ST_01`, `ST_02`...) |
-| `stop_name` | `VARCHAR(150)` | `NOT NULL` | Không | Tên trạm dừng (ví dụ: `Trạm KTX Khu A`, `Trạm ĐH KHTN`) |
-| `address` | `VARCHAR(255)` | `NULL` | `""` | Địa chỉ công trình / Tên đường đặt trạm |
+| `stop_id` | `VARCHAR(20)` | `PRIMARY KEY` | Không | Mã định danh trạm dừng, giữ nguyên `StopId` của nguồn (ví dụ: `35`, `8206`) |
+| `stop_code` | `VARCHAR(30)` | `NULL` | `NULL` | Mã trạm nghiệp vụ (ví dụ: `BX 01`, `Q1 190`) |
+| `stop_name` | `VARCHAR(150)` | `NOT NULL` | Không | Tên trạm dừng (ví dụ: `Bến xe buýt Sài Gòn`, `Khách sạn Viễn Đông`) |
+| `address` | `VARCHAR(255)` | `NULL` | `""` | Địa chỉ ghép từ số nhà, đường, phường, quận |
+| `stop_type` | `VARCHAR(50)` | `NULL` | `NULL` | Loại trạm: `Trụ dừng`, `Nhà chờ`, `Ô sơn`, `Bến xe`, `Ga Metro Số 1`... |
+| `status` | `VARCHAR(30)` | `NOT NULL` | `'Đang khai thác'` | Trạng thái: `Đang khai thác`, `Chưa khai thác`, `Tạm ngưng khai thác`, `Đã hủy`, `Không có` |
 | `geom` | `POINT` | `NOT NULL, SPATIAL` | SRID 4326 | Tọa độ điểm địa lý không gian: `POINT(longitude latitude)` |
 
 ---
 
 ### 3.5. Bảng `route_stops` (Quan hệ M-N: Thứ tự Ghé trạm trên Tuyến)
 * **Ý nghĩa:** Bảng trung gian giải quyết quan hệ Nhiều - Nhiều giữa Tuyến và Trạm dừng, xác định trình tự ghé trạm (`stop_order`) theo từng chiều di chuyển.
+* **Khóa chính:** `(route_id, direction, stop_order)` — cho phép một trạm được ghé nhiều lần trên tuyến vòng. Có thêm `INDEX(stop_id)` phục vụ khóa ngoại và tra cứu các tuyến đi qua một trạm.
 
 | Tên trường | Kiểu dữ liệu | Ràng buộc | Giá trị mặc định | Giải thích nghiệp vụ |
 |---|---|---|---|---|
 | `route_id` | `VARCHAR(20)` | `PK, FK` | Không | Mã tuyến buýt, liên kết `bus_routes(route_id)` (`ON DELETE CASCADE`) |
-| `stop_id` | `VARCHAR(20)` | `PK, FK` | Không | Mã trạm buýt, liên kết `bus_stops(stop_id)` (`ON DELETE CASCADE`) |
-| `direction` | `TINYINT` | `PRIMARY KEY` | `1` | Chiều tuyến áp dụng (`1: Đi`, `2: Về`) |
-| `stop_order` | `INT` | `NOT NULL` | `1` | Số thứ tự đón khách tăng dần của trạm trên tuyến ($1, 2, 3, \dots, n$) |
+| `direction` | `TINYINT` | `PK` | Không | Chiều tuyến áp dụng (`1: Đi`, `2: Về`) |
+| `stop_order` | `INT` | `PK` | Không | Số thứ tự đón khách tăng dần của trạm trên tuyến ($1, 2, 3, \dots, n$) |
+| `stop_id` | `VARCHAR(20)` | `NOT NULL, FK, INDEX` | Không | Mã trạm buýt, liên kết `bus_stops(stop_id)` (`ON DELETE CASCADE`) |
 
 ---
 
@@ -289,7 +328,7 @@ Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn
 ## 4. CƠ CHẾ CHỈ MỤC KHÔNG GIAN VÀ CÁC HÀM XỬ LÝ GIS (SPATIAL INDEXING & OGC FUNCTIONS)
 
 ### 4.1. Cơ chế Chỉ mục Không gian R-Tree (Spatial Indexing)
-Trong hệ thống CSDL MySQL 8.x Spatial, các bảng hình học `bus_stops`, `route_paths` và `vehicle_tracking_logs` đều được đánh chỉ mục không gian:
+Trong hệ thống CSDL MariaDB 10.4 Spatial, các bảng hình học `bus_stops`, `route_paths` và `vehicle_tracking_logs` đều được đánh chỉ mục không gian:
 ```sql
 SPATIAL INDEX(geom);
 ```
@@ -309,17 +348,28 @@ SPATIAL INDEX(geom);
      SELECT stop_id, stop_name, ST_AsGeoJSON(geom) AS geom_json FROM bus_stops;
      ```
 
-3. **`ST_Distance(geom1, geom2)`:**
+3. **`MBRContains(bbox, geom)`:**
+   * *Mục đích:* Lọc các trạm nằm trong khung nhìn bản đồ hiện tại (API `GET /api/v1/stops?bbox=minLon,minLat,maxLon,maxLat`). Phép so sánh hình chữ nhật bao (MBR) tận dụng trực tiếp Spatial Index R-Tree.
+   * *Ví dụ:*
+     ```sql
+     SELECT stop_id, stop_name FROM bus_stops
+     WHERE MBRContains(ST_GeomFromText('POLYGON((106.69 10.765, 106.705 10.765, 106.705 10.78, 106.69 10.78, 106.69 10.765))'), geom);
+     ```
+   * *Lưu ý:* Trên MariaDB 10.4, polygon truy vấn **không** được gắn SRID 4326 (`ST_GeomFromText(wkt)` thay vì `ST_GeomFromText(wkt, 4326)`); nếu gắn SRID, truy vấn dùng spatial index báo lỗi `1207 Update locks cannot be acquired during a READ UNCOMMITTED transaction`.
+
+4. **`ST_Distance(geom1, geom2)`:**
    * *Mục đích:* Tính toán khoảng cách trắc địa giữa vị trí GPS hiện thời của xe buýt và tọa độ của các trạm dừng để tìm trạm kế tiếp sắp tiếp cận.
 
 ---
 
 ## 5. MÃ NGUỒN KHỞI TẠO CƠ SỞ DỮ LIỆU ĐẦY ĐỦ (DDL SQL SCRIPT)
 
+Trích từ `database/schema.sql` (phần tạo bảng; phần seed tài khoản người dùng được lược bỏ). Với CSDL đang chạy từ phiên bản cũ, áp dụng thêm migration `database/migrations/001_busdata_schema.sql`, sau đó nạp dữ liệu bằng `cd backend && npm run db:import`.
+
 ```sql
 -- ====================================================================
--- HỆ THỐNG CƠ SỞ DỮ LIỆU QUẢN LÝ XE BUÝT 2D (MYSQL 8.0 / MARIADB SPATIAL)
--- Hệ quy chiếu: WGS84 (SRID 4326) | Quy ước trục: axis-order=long-lat
+-- HỆ THỐNG CƠ SỞ DỮ LIỆU QUẢN LÝ XE BUÝT (MYSQL 8.0 / MARIADB SPATIAL)
+-- Hệ quy chiếu: WGS84 (SRID 4326), Quy ước trục: axis-order=long-lat
 -- ====================================================================
 
 CREATE DATABASE IF NOT EXISTS bus_management_db 
@@ -327,7 +377,7 @@ CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE bus_management_db;
 
--- 1. Bảng Tài khoản & Phân quyền Quản trị
+-- 0. Bảng Người dùng & Phân quyền Quản trị (Auth & Users)
 DROP TABLE IF EXISTS users;
 CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -339,7 +389,7 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- 2. Bảng Danh mục Tuyến xe buýt
+-- 1. Bảng Tuyến xe buýt (Thực thể thuộc tính)
 DROP TABLE IF EXISTS route_stops;
 DROP TABLE IF EXISTS route_paths;
 DROP TABLE IF EXISTS vehicle_tracking_logs;
@@ -353,40 +403,49 @@ CREATE TABLE bus_routes (
     route_number VARCHAR(10) NOT NULL,
     route_name VARCHAR(150) NOT NULL,
     distance_km FLOAT DEFAULT 0.0,
-    headway_min INT DEFAULT 15
+    headway_min INT DEFAULT 15,
+    route_type VARCHAR(60) NULL,
+    color VARCHAR(9) NULL,
+    operation_time VARCHAR(30) NULL,
+    headway_text VARCHAR(20) NULL
 ) ENGINE=InnoDB;
 
--- 3. Bảng Lộ trình tim đường (Thực thể Không gian: LineString)
+-- 2. Bảng Lộ trình tuyến đường (Thực thể Không gian: LineString)
 CREATE TABLE route_paths (
     path_id INT AUTO_INCREMENT PRIMARY KEY,
     route_id VARCHAR(20) NOT NULL,
-    direction TINYINT NOT NULL COMMENT '1: Lượt đi, 2: Lượt về',
+    direction TINYINT NOT NULL COMMENT '1: Đi, 2: Về',
     geom LINESTRING NOT NULL /* SRID 4326 */,
     SPATIAL INDEX(geom),
     FOREIGN KEY (route_id) REFERENCES bus_routes(route_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 4. Bảng Trạm dừng xe buýt (Thực thể Không gian: Point)
+-- 3. Bảng Trạm dừng xe buýt (Thực thể Không gian: Point)
 CREATE TABLE bus_stops (
     stop_id VARCHAR(20) PRIMARY KEY,
+    stop_code VARCHAR(30) NULL,
     stop_name VARCHAR(150) NOT NULL,
     address VARCHAR(255),
+    stop_type VARCHAR(50) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'Đang khai thác',
     geom POINT NOT NULL /* SRID 4326 */,
     SPATIAL INDEX(geom)
 ) ENGINE=InnoDB;
 
--- 5. Bảng liên kết Thứ tự Trạm dừng trên Tuyến (Quan hệ M - N)
+-- 4. Bảng liên kết Thứ tự Trạm dừng trên Tuyến (Quan hệ M - N)
+-- PK theo (route_id, direction, stop_order): một trạm có thể ghé nhiều lần trên tuyến vòng
 CREATE TABLE route_stops (
     route_id VARCHAR(20) NOT NULL,
     stop_id VARCHAR(20) NOT NULL,
-    direction TINYINT NOT NULL COMMENT '1: Đi, 2: Về',
+    direction TINYINT NOT NULL,
     stop_order INT NOT NULL,
-    PRIMARY KEY (route_id, stop_id, direction),
+    PRIMARY KEY (route_id, direction, stop_order),
+    INDEX (stop_id),
     FOREIGN KEY (route_id) REFERENCES bus_routes(route_id) ON DELETE CASCADE,
     FOREIGN KEY (stop_id) REFERENCES bus_stops(stop_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 6. Bảng Phương tiện xe buýt
+-- 5. Bảng Phương tiện xe buýt
 CREATE TABLE vehicles (
     vehicle_id VARCHAR(20) PRIMARY KEY,
     plate_number VARCHAR(20) NOT NULL UNIQUE,
@@ -395,18 +454,18 @@ CREATE TABLE vehicles (
     status VARCHAR(30) DEFAULT 'ACTIVE'
 ) ENGINE=InnoDB;
 
--- 7. Bảng Lịch trình & Phân công chuyến xe
+-- 6. Bảng Lịch trình khởi hành
 CREATE TABLE schedules (
     schedule_id INT AUTO_INCREMENT PRIMARY KEY,
     route_id VARCHAR(20) NOT NULL,
     vehicle_id VARCHAR(20) NOT NULL,
     departure_time TIME NOT NULL,
-    direction TINYINT NOT NULL COMMENT '1: Đi, 2: Về',
+    direction TINYINT NOT NULL,
     FOREIGN KEY (route_id) REFERENCES bus_routes(route_id) ON DELETE CASCADE,
     FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 8. Bảng Nhật ký vết xe GPS (Spatio-Temporal Tracking Log)
+-- 7. Bảng Nhật ký vết xe (Spatial Temporal: Điểm động theo thời gian)
 CREATE TABLE vehicle_tracking_logs (
     log_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     vehicle_id VARCHAR(20) NOT NULL,
