@@ -61,31 +61,6 @@ async function initDatabase() {
       }
     }
 
-    // Đảm bảo có tài khoản khách mặc định (role VIEWER)
-    try {
-      const [khachUsers] = await conn.query("SELECT user_id FROM users WHERE username = 'khach'");
-      if (khachUsers.length === 0) {
-        const salt = await bcrypt.genSalt(10);
-        const khachHash = await bcrypt.hash("khach123", salt);
-        await conn.query(
-          "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
-          ["khach", khachHash, "Khách Tham Quan", "khach@busgis.vn", "VIEWER"]
-        );
-        console.log(">>> [Database] Đã tạo tài khoản khách mặc định: khach / khach123 (Role: VIEWER)");
-      }
-
-      const [viewerUsers] = await conn.query("SELECT user_id FROM users WHERE username = 'viewer'");
-      if (viewerUsers.length === 0) {
-        const salt = await bcrypt.genSalt(10);
-        const viewerHash = await bcrypt.hash("viewer123", salt);
-        await conn.query(
-          "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
-          ["viewer", viewerHash, "Người dùng Viewer", "viewer@busgis.vn", "VIEWER"]
-        );
-      }
-    } catch (uErr) {
-      console.warn(">>> [Database] Kiểm tra tài khoản người dùng:", uErr.message);
-    }
     conn.release();
   } catch (err) {
     console.warn(">>> [Database Cảnh báo] Kiểm tra CSDL:", err.message);
@@ -143,6 +118,11 @@ app.post("/api/v1/auth/login", async (req, res) => {
       return res.status(401).json({ error: "Tên đăng nhập hoặc mật khẩu không chính xác" });
     }
 
+    // Chỉ tài khoản quản trị (ADMIN/MANAGER) được đăng nhập; bản đồ công khai không cần tài khoản
+    if (user.role !== "ADMIN" && user.role !== "MANAGER") {
+      return res.status(403).json({ error: "Tài khoản không có quyền truy cập trang quản trị" });
+    }
+
     const tokenPayload = {
       user_id: user.user_id,
       username: user.username,
@@ -163,43 +143,6 @@ app.post("/api/v1/auth/login", async (req, res) => {
   }
 });
 
-// Đăng ký tài khoản mới (Mặc định cố định quyền VIEWER cho người dùng công khai)
-app.post("/api/v1/auth/register", async (req, res) => {
-  const { username, password, full_name, email } = req.body;
-  if (!username || !password || !full_name) {
-    return res.status(400).json({ error: "Vui lòng điền đầy đủ các thông tin bắt buộc" });
-  }
-
-  try {
-    const [existing] = await dbPool.query("SELECT user_id FROM users WHERE username = ?", [username]);
-    if (existing.length > 0) {
-      return res.status(400).json({ error: "Tên đăng nhập đã tồn tại trong hệ thống" });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    const password_hash = await bcrypt.hash(password, salt);
-    // Luôn cố định vai trò VIEWER đối với đăng ký công khai, tránh nguy cơ Privilege Escalation
-    const assignedRole = "VIEWER";
-
-    const [result] = await dbPool.query(
-      "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
-      [username, password_hash, full_name, email || "", assignedRole]
-    );
-
-    res.status(201).json({
-      message: "Đăng ký tài khoản thành công",
-      user_id: result.insertId,
-      username,
-      full_name,
-      role: assignedRole
-    });
-  } catch (error) {
-    console.error("Lỗi đăng ký:", error);
-    res.status(500).json({ error: "Lỗi tạo tài khoản" });
-  }
-});
-
-// Lấy thông tin tài khoản hiện tại
 app.get("/api/v1/auth/me", authenticateToken, async (req, res) => {
   try {
     const [users] = await dbPool.query(

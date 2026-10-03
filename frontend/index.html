@@ -26,12 +26,6 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
 
-    #viewDiv.blurred {
-      filter: blur(6px);
-      pointer-events: none;
-      transition: filter 0.3s ease;
-    }
-
     /* Cột bên trái (Sidebar): Điều khiển tuyến, tìm kiếm và bật/tắt lớp */
     #routeControlPanel {
       position: absolute;
@@ -341,54 +335,6 @@
       gap: 10px;
     }
 
-    .user-pill {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
-      padding: 6px 14px;
-      border-radius: 30px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .user-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 13px;
-    }
-    .user-avatar.role-ADMIN { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
-    .user-avatar.role-MANAGER { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-    .user-avatar.role-VIEWER { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-
-    .user-info-text {
-      display: flex;
-      flex-direction: column;
-    }
-    .user-name {
-      font-size: 13px;
-      font-weight: 700;
-      color: #1e293b;
-      line-height: 1.2;
-    }
-    .user-role-badge {
-      font-size: 10.5px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .badge-role-ADMIN { color: #dc2626; }
-    .badge-role-MANAGER { color: #d97706; }
-    .badge-role-VIEWER { color: #059669; }
-
     .btn-top-action {
       background: #f1f5f9;
       color: #334155;
@@ -408,10 +354,6 @@
       background: #e2e8f0;
       color: #0f172a;
     }
-    .btn-top-action.btn-logout:hover {
-      background: #fee2e2;
-      color: #dc2626;
-    }
     .btn-top-action.btn-admin {
       background: #0f172a;
       color: #38bdf8;
@@ -419,254 +361,6 @@
     .btn-top-action.btn-admin:hover {
       background: #1e293b;
       color: #7dd3fc;
-    }
-
-    /* ==================================================================== */
-    /* MODAL ĐĂNG NHẬP / ĐĂNG KÝ (GLASSMORPHISM POPUP) */
-    /* ==================================================================== */
-    #authModalOverlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(15, 23, 42, 0.78);
-      backdrop-filter: blur(8px);
-      z-index: 9999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      opacity: 1;
-      visibility: visible;
-      transition: all 0.3s ease;
-    }
-
-    #authModalOverlay.hidden {
-      opacity: 0;
-      visibility: hidden;
-      pointer-events: none;
-    }
-
-    .auth-card {
-      background: rgba(255, 255, 255, 0.98);
-      border-radius: 16px;
-      width: 100%;
-      max-width: 460px;
-      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      overflow: hidden;
-      animation: modalSlideUp 0.35s ease-out;
-    }
-
-    @keyframes modalSlideUp {
-      from { transform: translateY(20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-
-    .auth-card-header {
-      background: linear-gradient(135deg, #0079c1 0%, #004d7a 100%);
-      color: white;
-      padding: 24px 24px 20px;
-      text-align: center;
-      position: relative;
-    }
-    .auth-card-header h2 {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 800;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-    }
-    .auth-card-header p {
-      margin: 6px 0 0 0;
-      font-size: 13px;
-      opacity: 0.9;
-    }
-
-    .auth-tabs {
-      display: flex;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .auth-tab-btn {
-      flex: 1;
-      padding: 13px 10px;
-      text-align: center;
-      font-size: 13.5px;
-      font-weight: 700;
-      color: #64748b;
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      border-bottom: 3px solid transparent;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-    .auth-tab-btn.active {
-      color: #0079c1;
-      background: #fff;
-      border-bottom-color: #0079c1;
-    }
-
-    .auth-card-body {
-      padding: 22px 24px 26px;
-    }
-
-    .auth-form-group {
-      margin-bottom: 15px;
-    }
-    .auth-form-group label {
-      display: block;
-      font-size: 12px;
-      font-weight: 700;
-      color: #334155;
-      margin-bottom: 6px;
-    }
-    .auth-input-wrapper {
-      position: relative;
-    }
-    .auth-input-wrapper i.prefix-icon {
-      position: absolute;
-      left: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: #94a3b8;
-      font-size: 14px;
-    }
-    .auth-input-wrapper input {
-      width: 100%;
-      padding: 10px 38px 10px 36px;
-      border-radius: 8px;
-      border: 1.5px solid #cbd5e1;
-      font-size: 14px;
-      color: #1e293b;
-      outline: none;
-      transition: all 0.2s;
-    }
-    .auth-input-wrapper input:focus {
-      border-color: #0079c1;
-      box-shadow: 0 0 0 3px rgba(0, 121, 193, 0.15);
-    }
-    .toggle-pwd-btn {
-      position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      color: #94a3b8;
-      cursor: pointer;
-      font-size: 14px;
-      padding: 0;
-    }
-
-    .auth-submit-btn {
-      width: 100%;
-      padding: 12px;
-      background: linear-gradient(135deg, #0079c1 0%, #005a91 100%);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 14.5px;
-      font-weight: 700;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      transition: all 0.2s;
-      box-shadow: 0 4px 12px rgba(0, 121, 193, 0.25);
-    }
-    .auth-submit-btn:hover {
-      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-      box-shadow: 0 6px 16px rgba(0, 121, 193, 0.35);
-    }
-    .auth-submit-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .auth-alert {
-      padding: 10px 12px;
-      border-radius: 8px;
-      font-size: 12.5px;
-      margin-bottom: 14px;
-      display: none;
-    }
-    .auth-alert.error {
-      background: #fee2e2;
-      color: #b91c1c;
-      border: 1px solid #fecaca;
-      display: block;
-    }
-    .auth-alert.success {
-      background: #dcfce7;
-      color: #15803d;
-      border: 1px solid #bbf7d0;
-      display: block;
-    }
-
-    /* Gợi ý Đăng nhập nhanh 1-Click */
-    .quick-login-section {
-      margin-top: 18px;
-      padding-top: 14px;
-      border-top: 1px dashed #cbd5e1;
-    }
-    .quick-login-title {
-      font-size: 11.5px;
-      font-weight: 700;
-      color: #64748b;
-      margin-bottom: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
-    .quick-account-cards {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 8px;
-    }
-    .quick-acc-btn {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 8px 6px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .quick-acc-btn:hover {
-      background: #f0fdf4;
-      border-color: #22c55e;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-    }
-    .quick-acc-btn.role-admin:hover {
-      background: #fef2f2;
-      border-color: #ef4444;
-    }
-    .quick-acc-btn.role-manager:hover {
-      background: #fffbeb;
-      border-color: #f59e0b;
-    }
-    .quick-acc-btn strong {
-      display: block;
-      font-size: 12px;
-      color: #1e293b;
-    }
-    .quick-acc-btn span {
-      display: block;
-      font-size: 10.5px;
-      color: #64748b;
-      margin-top: 2px;
     }
 
     /* Toast Container */
@@ -709,25 +403,11 @@
   <!-- TOAST NOTIFICATIONS -->
   <div id="toastContainer"></div>
 
-  <!-- THANH THÔNG TIN TÀI KHOẢN NGƯỜI DÙNG (TOP-RIGHT) -->
-  <div id="userProfileBar" style="display: none;">
-    <div class="user-pill">
-      <div class="user-avatar" id="topUserAvatar">K</div>
-      <div class="user-info-text">
-        <span class="user-name" id="topUserName">Khách tham quan</span>
-        <span class="user-role-badge" id="topUserRole">Role: VIEWER</span>
-      </div>
-    </div>
-
-    <!-- Nút Mở trang Quản trị (Chỉ hiện cho ADMIN & MANAGER) -->
-    <a href="admin.html" target="_blank" id="btnTopAdminPortal" class="btn-top-action btn-admin" style="display: none;">
+  <!-- NÚT VÀO TRANG QUẢN TRỊ (TOP-RIGHT) - đăng nhập admin thực hiện tại admin.html -->
+  <div id="userProfileBar">
+    <a href="admin.html" target="_blank" id="btnTopAdminPortal" class="btn-top-action btn-admin">
       <i class="fa-solid fa-sliders"></i> Quản Trị
     </a>
-
-    <!-- Nút Đăng xuất -->
-    <button type="button" class="btn-top-action btn-logout" onclick="logoutUser()">
-      <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
-    </button>
   </div>
 
   <!-- CỘT BÊN TRÁI (SIDEBAR): DANH SÁCH TUYẾN, TÌM KIẾM TRẠM, BẬT/TẮT LỚP -->
@@ -814,7 +494,7 @@
 
   <!-- BẢNG ĐIỀU KHIỂN NỔI BÊN PHẢI: THÔNG TIN XE ĐANG CHỌN, VẬN TỐC, TRẠM TIẾP THEO -->
   <div id="fleetDashboard">
-    <h4><i class="fa-solid fa-satellite-dish" style="color: #28a745;"></i> ĐIỀU HÀNH ĐỘI XE REALTIME</h4>
+    <h4><i class="fa-solid fa-satellite-dish" style="color: #28a745;"></i> Theo dõi xe</h4>
     <div class="info-row">
       <b>Tuyến đang chạy:</b> 
       <span id="busRouteName" style="font-weight: 600; color: #0079c1;">Tuyến 08</span>
@@ -862,142 +542,13 @@
       </div>
     </div>
 
-    <a href="admin.html" target="_blank" class="btn-admin-link" id="btnBottomAdminLink" style="display: none;">
+    <a href="admin.html" target="_blank" class="btn-admin-link" id="btnBottomAdminLink">
       <i class="fa-solid fa-sliders"></i> Mở Trang Quản Trị (Admin Portal)
     </a>
   </div>
 
-  <!-- ==================================================================== -->
-  <!-- MODAL ĐĂNG NHẬP / ĐĂNG KÝ CHO NGƯỜI DÙNG & KHÁCH (ROLE VIEWER) -->
-  <!-- ==================================================================== -->
-  <div id="authModalOverlay">
-    <div class="auth-card">
-      <div class="auth-card-header">
-        <h2><i class="fa-solid fa-bus-simple"></i> BUS GIS TRACKING</h2>
-        <p>Hệ Thống Giám Sát Hành Trình Xe Buýt 2D Thời Gian Thực</p>
-      </div>
-
-      <!-- TABS CHUYỂN ĐỔI: ĐĂNG NHẬP / ĐĂNG KÝ -->
-      <div class="auth-tabs">
-        <button type="button" class="auth-tab-btn active" id="tabBtnLogin" onclick="switchAuthTab('login')">
-          <i class="fa-solid fa-right-to-bracket"></i> Đăng Nhập
-        </button>
-        <button type="button" class="auth-tab-btn" id="tabBtnRegister" onclick="switchAuthTab('register')">
-          <i class="fa-solid fa-user-plus"></i> Đăng Ký Khách
-        </button>
-      </div>
-
-      <div class="auth-card-body">
-        <!-- ALERT MESSAGE -->
-        <div id="authAlert" class="auth-alert"></div>
-
-        <!-- FORM ĐĂNG NHẬP -->
-        <form id="loginForm" onsubmit="handleLoginSubmit(event)">
-          <div class="auth-form-group">
-            <label for="loginUsername">Tên đăng nhập:</label>
-            <div class="auth-input-wrapper">
-              <i class="fa-solid fa-user prefix-icon"></i>
-              <input type="text" id="loginUsername" placeholder="Nhập tên tài khoản (VD: khach)" required />
-            </div>
-          </div>
-
-          <div class="auth-form-group">
-            <label for="loginPassword">Mật khẩu:</label>
-            <div class="auth-input-wrapper">
-              <i class="fa-solid fa-lock prefix-icon"></i>
-              <input type="password" id="loginPassword" placeholder="Nhập mật khẩu" required />
-              <button type="button" class="toggle-pwd-btn" onclick="togglePasswordVisibility('loginPassword', this)">
-                <i class="fa-solid fa-eye"></i>
-              </button>
-            </div>
-          </div>
-
-          <button type="submit" class="auth-submit-btn" id="btnLoginSubmit">
-            <i class="fa-solid fa-arrow-right-to-bracket"></i> ĐĂNG NHẬP VÀO BẢN ĐỒ
-          </button>
-
-          <!-- 1-CLICK DEMO LOGIN -->
-          <div class="quick-login-section">
-            <div class="quick-login-title">
-              <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Đăng nhập nhanh 1-Click (Tài khoản mẫu):
-            </div>
-            <div class="quick-account-cards">
-              <div class="quick-acc-btn" onclick="quickLogin('khach', 'khach123')">
-                <i class="fa-solid fa-user-tag" style="color: #10b981; font-size: 16px; margin-bottom: 3px;"></i>
-                <strong>Khách</strong>
-                <span>khach / khach123</span>
-              </div>
-              <div class="quick-acc-btn role-manager" onclick="quickLogin('manager', 'manager123')">
-                <i class="fa-solid fa-user-gear" style="color: #f59e0b; font-size: 16px; margin-bottom: 3px;"></i>
-                <strong>Quản lý</strong>
-                <span>manager / ***</span>
-              </div>
-              <div class="quick-acc-btn role-admin" onclick="quickLogin('admin', 'admin123')">
-                <i class="fa-solid fa-crown" style="color: #ef4444; font-size: 16px; margin-bottom: 3px;"></i>
-                <strong>Admin</strong>
-                <span>admin / admin123</span>
-              </div>
-            </div>
-          </div>
-        </form>
-
-        <!-- FORM ĐĂNG KÝ TÀI KHOẢN KHÁCH -->
-        <form id="registerForm" onsubmit="handleRegisterSubmit(event)" style="display: none;">
-          <div class="auth-form-group">
-            <label for="regUsername">Tên đăng nhập mới:</label>
-            <div class="auth-input-wrapper">
-              <i class="fa-solid fa-user prefix-icon"></i>
-              <input type="text" id="regUsername" placeholder="VD: guest_01" required />
-            </div>
-          </div>
-
-          <div class="auth-form-group">
-            <label for="regFullName">Họ và tên của bạn:</label>
-            <div class="auth-input-wrapper">
-              <i class="fa-solid fa-id-card prefix-icon"></i>
-              <input type="text" id="regFullName" placeholder="VD: Nguyễn Văn Khách" required />
-            </div>
-          </div>
-
-          <div class="auth-form-group">
-            <label for="regEmail">Địa chỉ Email (Tùy chọn):</label>
-            <div class="auth-input-wrapper">
-              <i class="fa-solid fa-envelope prefix-icon"></i>
-              <input type="email" id="regEmail" placeholder="khachhang@gmail.com" />
-            </div>
-          </div>
-
-          <div class="auth-form-group">
-            <label for="regPassword">Mật khẩu:</label>
-            <div class="auth-input-wrapper">
-              <i class="fa-solid fa-lock prefix-icon"></i>
-              <input type="password" id="regPassword" placeholder="Tối thiểu 6 ký tự" required />
-            </div>
-          </div>
-
-          <div class="auth-form-group">
-            <label for="regConfirmPassword">Xác nhận mật khẩu:</label>
-            <div class="auth-input-wrapper">
-              <i class="fa-solid fa-shield-halved prefix-icon"></i>
-              <input type="password" id="regConfirmPassword" placeholder="Nhập lại mật khẩu" required />
-            </div>
-          </div>
-
-          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 8px 12px; font-size: 12px; color: #166534; margin-bottom: 15px;">
-            <i class="fa-solid fa-circle-check"></i> Tài khoản sau khi đăng ký sẽ có vai trò <b>Khách (VIEWER)</b> để theo dõi lộ trình và xe buýt.
-          </div>
-
-          <button type="submit" class="auth-submit-btn" id="btnRegisterSubmit">
-            <i class="fa-solid fa-user-check"></i> ĐĂNG KÝ & TRUY CẬP NGAY
-          </button>
-        </form>
-      </div>
-    </div>
-  </div>
-
   <script>
     const API_BASE = "http://localhost:3000/api/v1";
-    let currentUser = null;
     let allRoutes = [];
     let currentRawStops = [];
     let currentSelectedRoute = "ALL";
@@ -1032,238 +583,6 @@
     }
 
     // --------------------------------------------------------------------
-    // QUẢN LÝ XÁC THỰC (AUTHENTICATION & ROLES)
-    // --------------------------------------------------------------------
-    function getStoredToken() {
-      // Chỉ sử dụng token người dùng frontend (bus_user_token), không tự động kế thừa bus_admin_token
-      return localStorage.getItem("bus_user_token");
-    }
-
-    function switchAuthTab(tab) {
-      const tabBtnLogin = document.getElementById("tabBtnLogin");
-      const tabBtnRegister = document.getElementById("tabBtnRegister");
-      const loginForm = document.getElementById("loginForm");
-      const registerForm = document.getElementById("registerForm");
-      const alertBox = document.getElementById("authAlert");
-      
-      alertBox.className = "auth-alert";
-      alertBox.style.display = "none";
-
-      if (tab === "login") {
-        tabBtnLogin.classList.add("active");
-        tabBtnRegister.classList.remove("active");
-        loginForm.style.display = "block";
-        registerForm.style.display = "none";
-      } else {
-        tabBtnLogin.classList.remove("active");
-        tabBtnRegister.classList.add("active");
-        loginForm.style.display = "none";
-        registerForm.style.display = "block";
-      }
-    }
-
-    function togglePasswordVisibility(inputId, btn) {
-      const input = document.getElementById(inputId);
-      if (input.type === "password") {
-        input.type = "text";
-        btn.innerHTML = `<i class="fa-solid fa-eye-slash"></i>`;
-      } else {
-        input.type = "password";
-        btn.innerHTML = `<i class="fa-solid fa-eye"></i>`;
-      }
-    }
-
-    function showAuthAlert(message, type = "error") {
-      const alertBox = document.getElementById("authAlert");
-      alertBox.className = `auth-alert ${type}`;
-      alertBox.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}"></i> ${message}`;
-      alertBox.style.display = "block";
-    }
-
-    async function checkAuthOnStartup() {
-      const token = getStoredToken();
-      if (!token) {
-        openAuthModal();
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API_BASE}/auth/me`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-
-        if (res.ok) {
-          currentUser = await res.json();
-          onLoginSuccess(token, currentUser, false);
-        } else {
-          localStorage.removeItem("bus_user_token");
-          openAuthModal();
-        }
-      } catch (err) {
-        console.warn("Không kết nối được server kiểm tra auth:", err);
-        openAuthModal();
-      }
-    }
-
-    function openAuthModal() {
-      const overlay = document.getElementById("authModalOverlay");
-      overlay.classList.remove("hidden");
-      document.getElementById("viewDiv").classList.add("blurred");
-      document.getElementById("userProfileBar").style.display = "none";
-    }
-
-    function closeAuthModal() {
-      const overlay = document.getElementById("authModalOverlay");
-      overlay.classList.add("hidden");
-      document.getElementById("viewDiv").classList.remove("blurred");
-      document.getElementById("userProfileBar").style.display = "flex";
-    }
-
-    async function handleLoginSubmit(e) {
-      e.preventDefault();
-      const username = document.getElementById("loginUsername").value.trim();
-      const password = document.getElementById("loginPassword").value;
-      const btn = document.getElementById("btnLoginSubmit");
-
-      if (!username || !password) {
-        showAuthAlert("Vui lòng nhập tên đăng nhập và mật khẩu!", "error");
-        return;
-      }
-
-      try {
-        btn.disabled = true;
-        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang xác thực...`;
-
-        const res = await fetch(`${API_BASE}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password })
-        });
-
-        const data = await res.json();
-        if (res.ok) {
-          showAuthAlert("Đăng nhập thành công!", "success");
-          setTimeout(() => {
-            onLoginSuccess(data.token, data.user, true);
-          }, 400);
-        } else {
-          showAuthAlert(data.error || "Tên đăng nhập hoặc mật khẩu không chính xác", "error");
-        }
-      } catch (err) {
-        showAuthAlert("Không thể kết nối đến máy chủ Backend (Port 3000)", "error");
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i class="fa-solid fa-arrow-right-to-bracket"></i> ĐĂNG NHẬP VÀO BẢN ĐỒ`;
-      }
-    }
-
-    function quickLogin(user, pwd) {
-      document.getElementById("loginUsername").value = user;
-      document.getElementById("loginPassword").value = pwd;
-      handleLoginSubmit(new Event("submit"));
-    }
-
-    async function handleRegisterSubmit(e) {
-      e.preventDefault();
-      const username = document.getElementById("regUsername").value.trim();
-      const full_name = document.getElementById("regFullName").value.trim();
-      const email = document.getElementById("regEmail").value.trim();
-      const password = document.getElementById("regPassword").value;
-      const confirmPassword = document.getElementById("regConfirmPassword").value;
-      const btn = document.getElementById("btnRegisterSubmit");
-
-      if (password !== confirmPassword) {
-        showAuthAlert("Mật khẩu xác nhận không khớp!", "error");
-        return;
-      }
-      if (password.length < 6) {
-        showAuthAlert("Mật khẩu phải có độ dài từ 6 ký tự trở lên!", "error");
-        return;
-      }
-
-      try {
-        btn.disabled = true;
-        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang khởi tạo tài khoản...`;
-
-        const res = await fetch(`${API_BASE}/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password, full_name, email, role: "VIEWER" })
-        });
-
-        const data = await res.json();
-        if (res.ok) {
-          showAuthAlert("Đăng ký tài khoản Khách thành công! Đang tự động đăng nhập...", "success");
-          showToast(`Chào mừng ${full_name} đến với hệ thống!`, "success");
-          
-          // Tự động đăng nhập
-          setTimeout(() => {
-            quickLogin(username, password);
-          }, 700);
-        } else {
-          showAuthAlert(data.error || "Đăng ký thất bại. Tên đăng nhập có thể đã tồn tại.", "error");
-        }
-      } catch (err) {
-        showAuthAlert("Lỗi kết nối máy chủ", "error");
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i class="fa-solid fa-user-check"></i> ĐĂNG KÝ & TRUY CẬP NGAY`;
-      }
-    }
-
-    function onLoginSuccess(token, user, showWelcomeToast = true) {
-      currentUser = user;
-      localStorage.setItem("bus_user_token", token);
-
-      // Cập nhật Header Profile Bar
-      const avatarEl = document.getElementById("topUserAvatar");
-      avatarEl.innerText = (user.full_name || user.username || "K").charAt(0).toUpperCase();
-      avatarEl.className = `user-avatar role-${user.role}`;
-
-      document.getElementById("topUserName").innerText = user.full_name || user.username;
-      
-      let roleLabel = "Khách (VIEWER)";
-      if (user.role === "ADMIN") roleLabel = "Quản trị viên (ADMIN)";
-      if (user.role === "MANAGER") roleLabel = "Quản lý tuyến (MANAGER)";
-      
-      const roleBadge = document.getElementById("topUserRole");
-      roleBadge.innerText = roleLabel;
-      roleBadge.className = `user-role-badge badge-role-${user.role}`;
-
-      // Nút Admin Portal
-      const btnAdmin = document.getElementById("btnTopAdminPortal");
-      const btnBottomAdmin = document.getElementById("btnBottomAdminLink");
-      if (user.role === "ADMIN" || user.role === "MANAGER") {
-        if (btnAdmin) btnAdmin.style.display = "flex";
-        if (btnBottomAdmin) btnBottomAdmin.style.display = "block";
-      } else {
-        if (btnAdmin) btnAdmin.style.display = "none";
-        if (btnBottomAdmin) btnBottomAdmin.style.display = "none";
-      }
-
-      closeAuthModal();
-
-      if (showWelcomeToast) {
-        showToast(`🎉 Xin chào ${user.full_name}! Quyền truy cập: ${roleLabel}`, "success");
-      }
-
-      // Nạp dữ liệu bản đồ
-      if (allRoutes.length === 0) {
-        loadRoutesList();
-      }
-      if (!socketInstance) {
-        initSocketRealtime();
-      }
-    }
-
-    function logoutUser() {
-      localStorage.removeItem("bus_user_token");
-      currentUser = null;
-      openAuthModal();
-      showToast("👋 Bạn đã đăng xuất thành công.", "info");
-    }
-
-    // --------------------------------------------------------------------
     // KHỞI TẠO BẢN ĐỒ ARCGIS 2D
     // --------------------------------------------------------------------
     require([
@@ -1272,8 +591,11 @@
       "esri/Graphic",
       "esri/layers/GraphicsLayer",
       "esri/geometry/Point",
-      "esri/widgets/BasemapToggle"
-    ], function(EsriMap, MapView, Graphic, GraphicsLayer, Point, BasemapToggle) {
+      "esri/widgets/BasemapToggle",
+      "esri/widgets/Locate",
+      "esri/widgets/Track",
+      "esri/core/reactiveUtils"
+    ], function(EsriMap, MapView, Graphic, GraphicsLayer, Point, BasemapToggle, Locate, Track, reactiveUtils) {
       GraphicClass = Graphic;
       PointClass = Point;
 
@@ -1290,6 +612,43 @@
       // Nút chuyển đổi nhanh ảnh Vệ tinh
       const basemapToggle = new BasemapToggle({ view: mapView, nextBasemap: "satellite" });
       mapView.ui.add(basemapToggle, "bottom-left");
+
+      // Định vị vị trí hiện tại của người dùng (yêu cầu HTTPS hoặc localhost)
+      if (!navigator.geolocation || !window.isSecureContext) {
+        console.warn("Trình duyệt không hỗ trợ định vị hoặc trang không chạy trên HTTPS/localhost.");
+      }
+
+      // Nút định vị một lần: hiện chấm xanh + vòng sai số và zoom tới vị trí
+      const locateWidget = new Locate({ view: mapView, scale: 5000 });
+      locateWidget.on("locate", () => showToast("📍 Đã xác định vị trí của bạn", "success"));
+      locateWidget.on("locate-error", (e) => showToast(geolocationErrorMessage(e.error), "error"));
+      mapView.ui.add(locateWidget, "bottom-left");
+
+      // Nút theo dõi liên tục: bám theo vị trí khi người dùng di chuyển
+      const trackWidget = new Track({ view: mapView, scale: 5000 });
+      let trackFirstFix = false;
+      reactiveUtils.watch(() => trackWidget.tracking, (tracking) => {
+        if (tracking) {
+          trackFirstFix = false;
+        } else if (trackFirstFix) {
+          showToast("Đã tắt theo dõi vị trí", "info");
+        }
+      });
+      trackWidget.on("track", () => {
+        if (!trackFirstFix) {
+          trackFirstFix = true;
+          showToast("🛰️ Đang theo dõi vị trí của bạn", "success");
+        }
+      });
+      trackWidget.on("track-error", (e) => {
+        // Lỗi tạm thời (mất GPS chốc lát, hết giờ khi đứng yên) sau khi đã có vị trí: không spam toast
+        if (trackFirstFix && trackWidget.tracking) {
+          console.warn("Lỗi định vị tạm thời khi đang theo dõi:", e.error);
+          return;
+        }
+        showToast(geolocationErrorMessage(e.error), "error");
+      });
+      mapView.ui.add(trackWidget, "bottom-left");
 
       // 2. Tạo các Layer riêng biệt để quản lý
       routeLayer = new GraphicsLayer({ title: "Lộ trình tim đường" });
@@ -1309,9 +668,21 @@
         });
       });
 
-      // 3. Kiểm tra đăng nhập
-      checkAuthOnStartup();
+      // 3. Nạp dữ liệu bản đồ & kết nối realtime (không yêu cầu đăng nhập)
+      loadRoutesList();
+      initSocketRealtime();
     });
+
+    // --------------------------------------------------------------------
+    // THÔNG BÁO LỖI ĐỊNH VỊ (GeolocationPositionError: 1 từ chối, 2 không xác định, 3 hết giờ)
+    // --------------------------------------------------------------------
+    function geolocationErrorMessage(err) {
+      const code = err?.code ?? err?.details?.code ?? err?.details?.error?.code;
+      if (code === 1) return "Bạn đã từ chối quyền truy cập vị trí. Hãy cho phép trong cài đặt trình duyệt.";
+      if (code === 2) return "Không xác định được vị trí hiện tại. Kiểm tra GPS / kết nối mạng.";
+      if (code === 3) return "Hết thời gian chờ định vị. Vui lòng thử lại.";
+      return "Không thể định vị vị trí của bạn.";
+    }
 
     // --------------------------------------------------------------------
     // BẬT / TẮT LỚP HIỂN THỊ

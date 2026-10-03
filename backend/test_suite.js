@@ -75,7 +75,7 @@ async function runTestSuite() {
   console.log("=======================================================================\n");
 
   let adminToken = "";
-  let viewerToken = "";
+  let managerToken = "";
   let dbConn = null;
 
   // ------------------------------------------------------------------
@@ -138,18 +138,26 @@ async function runTestSuite() {
       logFail("Đăng nhập Admin", `Status ${adminLogin.status}: ${JSON.stringify(adminLogin.data)}`);
     }
 
-    // 2.2 Đăng nhập Khách (Viewer)
-    const viewerLogin = await fetchJson(`${API_BASE}/auth/login`, {
+    // 2.2 Đăng nhập Khách bị loại bỏ (bản đồ công khai, chỉ ADMIN/MANAGER được đăng nhập)
+    const guestLogin = await fetchJson(`${API_BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: { username: "khach", password: "khach123" }
     });
 
-    if (viewerLogin.status === 200 && viewerLogin.data.token && viewerLogin.data.user.role === "VIEWER") {
-      viewerToken = viewerLogin.data.token;
-      logPass("Đăng nhập Khách (khach/khach123)", `Token JWT cấp thành công, Role: ${viewerLogin.data.user.role}`);
+    if (guestLogin.status === 401 || guestLogin.status === 403) {
+      logPass("Đăng nhập Khách bị từ chối (khach/khach123)", `Máy chủ từ chối với mã ${guestLogin.status}`);
     } else {
-      logFail("Đăng nhập Khách", `Status ${viewerLogin.status}: ${JSON.stringify(viewerLogin.data)}`);
+      logFail("Đăng nhập Khách bị từ chối", `Mong đợi 401/403 nhưng nhận được ${guestLogin.status}`);
+    }
+
+    const managerLogin = await fetchJson(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: { username: "manager", password: "manager123" }
+    });
+    if (managerLogin.status === 200 && managerLogin.data.token) {
+      managerToken = managerLogin.data.token;
     }
 
     // 2.3 Đăng nhập sai mật khẩu (Bảo mật)
@@ -165,20 +173,20 @@ async function runTestSuite() {
       logFail("Bảo mật Đăng nhập Sai Mật khẩu", `Mong đợi 401 nhưng nhận được ${failedLogin.status}`);
     }
 
-    // 2.4 Kiểm tra phân quyền RBAC: Viewer cố truy cập API Quản lý Users (Admin only)
-    const viewerAccessUsers = await fetchJson(`${API_BASE}/users`, {
+    // 2.4 Kiểm tra phân quyền RBAC: Manager cố truy cập API Quản lý Users (Admin only)
+    const managerAccessUsers = await fetchJson(`${API_BASE}/users`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${viewerToken}`
+        "Authorization": `Bearer ${managerToken}`
       },
       body: { username: "fake_user", password: "123", full_name: "Fake" }
     });
 
-    if (viewerAccessUsers.status === 403) {
-      logPass("Bảo mật RBAC (Viewer tạo User)", "Bị chặn với mã 403 Forbidden chính xác");
+    if (managerToken && managerAccessUsers.status === 403) {
+      logPass("Bảo mật RBAC (Manager tạo User)", "Bị chặn với mã 403 Forbidden chính xác");
     } else {
-      logFail("Bảo mật RBAC (Viewer tạo User)", `Lỗ hổng bảo mật! Nhận status: ${viewerAccessUsers.status}`);
+      logFail("Bảo mật RBAC (Manager tạo User)", `Lỗ hổng bảo mật! Nhận status: ${managerAccessUsers.status}`);
     }
   } catch (err) {
     logFail("Module Auth & RBAC", err.message);
