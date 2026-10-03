@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "simulate": "node simulator.js"
+    "simulate": "echo 'Simulator đang tạm tắt (chưa tối ưu cho 332 lộ trình TP.HCM). Bật lại: node simulator.js' && exit 1",
+    "db:import": "node scripts/import_busdata_sql.js",
+    "db:export": "node scripts/export_busdata_sql.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

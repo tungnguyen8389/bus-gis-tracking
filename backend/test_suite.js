@@ -197,10 +197,13 @@ async function runTestSuite() {
       logFail("API GET /routes", `Lỗi tải tuyến: ${routesRes.status}`);
     }
 
-    // 3.2 Lộ trình đơn tuyến (GET /routes/BUS_01/path?direction=1)
-    const pathRes = await fetchJson(`${API_BASE}/routes/BUS_01/path?direction=1`);
+    // Tuyến mẫu: tuyến đầu tiên có lộ trình trong CSDL (dữ liệu TP.HCM nạp từ busdata.sql)
+    const sampleRoute = (Array.isArray(routesRes.data) && routesRes.data.find(r => r.total_paths > 0)) || { route_id: "1", route_number: "01" };
+
+    // 3.2 Lộ trình đơn tuyến (GET /routes/:id/path?direction=1)
+    const pathRes = await fetchJson(`${API_BASE}/routes/${sampleRoute.route_id}/path?direction=1`);
     if (pathRes.status === 200 && pathRes.data.type === "Feature" && pathRes.data.geometry.type === "LineString") {
-      logPass("API GET /routes/:id/path", `Lộ trình LineString Tuyến 08 chuẩn GeoJSON (${pathRes.data.geometry.coordinates.length} điểm)`);
+      logPass("API GET /routes/:id/path", `Lộ trình LineString Tuyến ${sampleRoute.route_number} chuẩn GeoJSON (${pathRes.data.geometry.coordinates.length} điểm)`);
     } else {
       logFail("API GET /routes/:id/path", `Dữ liệu không đúng chuẩn Feature LineString: ${pathRes.status}`);
     }
@@ -221,8 +224,8 @@ async function runTestSuite() {
       logFail("API GET /stops", `Lỗi tải trạm dừng: ${stopsRes.status}`);
     }
 
-    // 3.5 Trạm theo tuyến (GET /routes/BUS_01/stops?direction=1)
-    const routeStopsRes = await fetchJson(`${API_BASE}/routes/BUS_01/stops?direction=1`);
+    // 3.5 Trạm theo tuyến (GET /routes/:id/stops?direction=1)
+    const routeStopsRes = await fetchJson(`${API_BASE}/routes/${sampleRoute.route_id}/stops?direction=1`);
     if (routeStopsRes.status === 200 && Array.isArray(routeStopsRes.data)) {
       logPass("API GET /routes/:id/stops", `Tải thành công ${routeStopsRes.data.length} trạm theo thứ tự đón khách`);
     } else {
@@ -274,7 +277,7 @@ async function runTestSuite() {
         socketClient.emit("gps_ping", {
           vehicle_id: "BUS_TEST_VERIFY",
           plate_number: "51B-999.99",
-          route_id: "BUS_01",
+          route_id: "1",
           longitude: 106.80196,
           latitude: 10.87052,
           speed_kmh: 35,

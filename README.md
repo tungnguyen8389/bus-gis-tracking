@@ -9,12 +9,14 @@ Dự án môn Hệ Thống Thông Tin Địa Lý (IE402) - Ứng dụng công ng
 ```
 Bus_project/
 ├── database/
-│   └── schema.sql                  # Lược đồ CSDL MySQL 8.x Spatial + Seed dữ liệu ĐHQG
+│   ├── schema.sql                  # Lược đồ CSDL MySQL 8.x / MariaDB Spatial + tài khoản & xe mẫu
+│   └── busdata.sql                 # Dữ liệu xe buýt TP.HCM: 178 tuyến, 5898 trạm, 332 lộ trình (sinh bởi db:export)
 ├── backend/
 │   ├── .env                        # File cấu hình môi trường (Port, DB connection)
 │   ├── package.json                # Dependencies Express, Socket.io, MySQL2
 │   ├── server.js                   # REST API GeoJSON & Socket.io Realtime Hub
-│   └── simulator.js                # Bộ phát GPS giả lập lộ trình xe buýt
+│   ├── simulator.js                # Bộ phát GPS giả lập lộ trình xe buýt (đang tạm tắt)
+│   └── scripts/                    # db:import / db:export busdata.sql
 ├── docs/
 │   └── NODEJS_VS_LARAVEL_ANALYSIS.md # Phân tích so sánh công nghệ Backend (Node.js vs Laravel)
 ├── frontend/
@@ -42,7 +44,14 @@ Bus_project/
 
 ### 1. Khởi tạo Cơ sở dữ liệu (MySQL Spatial)
 * Mở **XAMPP Control Panel** và Start module **MySQL**.
-* Khi khởi động backend, server sẽ tự động tạo database `bus_management_db` và nạp schema nếu chưa có (hoặc bạn có thể import thủ công `database/schema.sql`).
+* Nạp dữ liệu xe buýt TP.HCM (tự tạo database `bus_management_db` và bảng nếu chưa có; CSDL cũ dùng schema demo ĐHQG sẽ được tự bổ sung cột / đổi khóa):
+```bash
+cd backend
+npm install
+npm run db:import
+```
+* Lệnh này thay toàn bộ dữ liệu 4 bảng `bus_routes`, `bus_stops`, `route_paths`, `route_stops` bằng nội dung `database/busdata.sql` (chạy trong 1 transaction). Tài khoản và xe được giữ nguyên; lịch trình trỏ tới tuyến không còn tồn tại (vd. demo `BUS_01`) bị xóa.
+* Sau khi sửa tuyến / trạm / lộ trình trong CSDL, chạy `npm run db:export` để ghi lại vào `database/busdata.sql` rồi commit file đó.
 
 ### 2. Khởi động Backend Server
 ```bash
@@ -51,12 +60,8 @@ npm start
 ```
 > Server sẽ lắng nghe tại: `http://localhost:3000`
 
-### 3. Khởi động Bộ giả lập GPS xe buýt
-Mở một cửa sổ Terminal mới:
-```bash
-cd backend
-npm run simulate
-```
+### 3. Bộ giả lập GPS xe buýt (đang tạm tắt)
+`npm run simulate` hiện chỉ in thông báo và thoát: simulator chưa được tối ưu cho 332 lộ trình TP.HCM (tự sinh 2–3 xe mỗi lộ trình, phát 500ms/lần). Nếu vẫn cần chạy thử: `node simulator.js`.
 
 ### 4. Truy cập Hệ thống
 * **Giao diện Bản đồ Giám sát Real-time:** `http://localhost/Bus_project/frontend/index.html`
