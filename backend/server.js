@@ -551,7 +551,7 @@ app.post("/api/v1/routes/:route_id/stops", authenticateToken, async (req, res) =
     await dbPool.query(
       `INSERT INTO route_stops (route_id, stop_id, direction, stop_order)
        VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE stop_order = VALUES(stop_order)`,
+       ON DUPLICATE KEY UPDATE stop_id = VALUES(stop_id)`,
       [route_id, stop_id, direction, stop_order]
     );
     res.status(201).json({ message: "Gán trạm vào tuyến thành công" });
@@ -560,15 +560,23 @@ app.post("/api/v1/routes/:route_id/stops", authenticateToken, async (req, res) =
   }
 });
 
-// Xóa trạm khỏi tuyến
+// Xóa trạm khỏi tuyến (truyền stop_order để chỉ xóa đúng 1 lượt ghé trên tuyến vòng)
 app.delete("/api/v1/routes/:route_id/stops/:stop_id", authenticateToken, async (req, res) => {
   const { route_id, stop_id } = req.params;
   const direction = req.query.direction || 1;
+  const { stop_order } = req.query;
   try {
-    await dbPool.query(
-      "DELETE FROM route_stops WHERE route_id = ? AND stop_id = ? AND direction = ?",
-      [route_id, stop_id, direction]
-    );
+    if (stop_order !== undefined) {
+      await dbPool.query(
+        "DELETE FROM route_stops WHERE route_id = ? AND stop_id = ? AND direction = ? AND stop_order = ?",
+        [route_id, stop_id, direction, stop_order]
+      );
+    } else {
+      await dbPool.query(
+        "DELETE FROM route_stops WHERE route_id = ? AND stop_id = ? AND direction = ?",
+        [route_id, stop_id, direction]
+      );
+    }
     res.json({ message: "Đã xóa trạm khỏi tuyến" });
   } catch (error) {
     res.status(500).json({ error: "Lỗi xóa trạm khỏi tuyến" });
@@ -886,7 +894,7 @@ app.post("/api/v1/import/json", authenticateToken, async (req, res) => {
           await conn.query(
             `INSERT INTO route_stops (route_id, stop_id, direction, stop_order)
              VALUES (?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE stop_order = VALUES(stop_order)`,
+             ON DUPLICATE KEY UPDATE stop_id = VALUES(stop_id)`,
             [targetRouteId, stopId, dir, stopOrder]
           );
 
@@ -999,7 +1007,7 @@ app.post("/api/v1/import/json", authenticateToken, async (req, res) => {
             await conn.query(
               `INSERT INTO route_stops (route_id, stop_id, direction, stop_order)
                VALUES (?, ?, ?, ?)
-               ON DUPLICATE KEY UPDATE stop_order = VALUES(stop_order)`,
+               ON DUPLICATE KEY UPDATE stop_id = VALUES(stop_id)`,
               [route_id, stopId, dir, st.stop_order]
             );
           }

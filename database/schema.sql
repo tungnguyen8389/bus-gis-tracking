@@ -34,7 +34,11 @@ CREATE TABLE bus_routes (
     route_number VARCHAR(10) NOT NULL,
     route_name VARCHAR(150) NOT NULL,
     distance_km FLOAT DEFAULT 0.0,
-    headway_min INT DEFAULT 15
+    headway_min INT DEFAULT 15,
+    route_type VARCHAR(60) NULL,
+    color VARCHAR(9) NULL,
+    operation_time VARCHAR(30) NULL,
+    headway_text VARCHAR(20) NULL
 ) ENGINE=InnoDB;
 
 -- 2. Bảng Lộ trình tuyến đường (Thực thể Không gian: LineString)
@@ -50,19 +54,24 @@ CREATE TABLE route_paths (
 -- 3. Bảng Trạm dừng xe buýt (Thực thể Không gian: Point)
 CREATE TABLE bus_stops (
     stop_id VARCHAR(20) PRIMARY KEY,
+    stop_code VARCHAR(30) NULL,
     stop_name VARCHAR(150) NOT NULL,
     address VARCHAR(255),
+    stop_type VARCHAR(50) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'Đang khai thác',
     geom POINT NOT NULL /* SRID 4326 */,
     SPATIAL INDEX(geom)
 ) ENGINE=InnoDB;
 
 -- 4. Bảng liên kết Thứ tự Trạm dừng trên Tuyến (Quan hệ M - N)
+-- PK theo (route_id, direction, stop_order): một trạm có thể ghé nhiều lần trên tuyến vòng
 CREATE TABLE route_stops (
     route_id VARCHAR(20) NOT NULL,
     stop_id VARCHAR(20) NOT NULL,
     direction TINYINT NOT NULL,
     stop_order INT NOT NULL,
-    PRIMARY KEY (route_id, stop_id, direction),
+    PRIMARY KEY (route_id, direction, stop_order),
+    INDEX (stop_id),
     FOREIGN KEY (route_id) REFERENCES bus_routes(route_id) ON DELETE CASCADE,
     FOREIGN KEY (stop_id) REFERENCES bus_stops(stop_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

@@ -21,3 +21,6 @@ Thumbs.db
 # Local AI Agent Specifications (Do not push to Git)
 AGENTS.md
 GEMINI.md
+
+# Database backups (contain user password hashes)
+database/backup/

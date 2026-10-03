@@ -63,7 +63,7 @@ function routeStopRowHtml(st, direction) {
       <td>${st.address || "---"}</td>
       <td>[${st.longitude.toFixed(4)}, ${st.latitude.toFixed(4)}]</td>
       <td>
-        <button class="btn btn-sm btn-danger" onclick="removeStopFromRoute('${st.route_id}', '${st.stop_id}', ${direction})" title="Xóa khỏi tuyến này">
+        <button class="btn btn-sm btn-danger" onclick="removeStopFromRoute('${st.route_id}', '${st.stop_id}', ${direction}, ${st.stop_order})" title="Xóa khỏi tuyến này">
           <i class="fa-solid fa-unlink"></i> Bỏ gán
         </button>
       </td>
@@ -186,8 +186,8 @@ async function saveAssignStop(e) {
   }
 }
 
-async function removeStopFromRoute(route_id, stop_id, direction) {
+async function removeStopFromRoute(route_id, stop_id, direction, stop_order) {
   if (!confirm(`Xóa trạm '${stop_id}' khỏi tuyến '${route_id}'?`)) return;
-  const res = await apiRequest("DELETE", `/routes/${route_id}/stops/${stop_id}?direction=${direction}`);
+  const res = await apiRequest("DELETE", `/routes/${route_id}/stops/${stop_id}?direction=${direction}&stop_order=${stop_order}`);
   if (res.ok) loadStops();
 }
