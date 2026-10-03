@@ -265,6 +265,57 @@ async function runTestSuite() {
     } else {
       logFail("API GET /admin/stats", `Lỗi thống kê: ${statsRes.status}`);
     }
+
+    // 3.9 Tìm tuyến cho khách (GET /trip-plan): đứng tại trạm đầu tuyến mẫu, đến trạm thứ 5 cùng chiều
+    const sampleStops = Array.isArray(routeStopsRes.data) ? routeStopsRes.data : [];
+    if (sampleStops.length >= 2) {
+      const boardStop = sampleStops[0];
+      const alightStop = sampleStops[Math.min(4, sampleStops.length - 1)];
+
+      const planRes = await fetchJson(`${API_BASE}/trip-plan?to_stop_id=${alightStop.stop_id}&from_lat=${boardStop.latitude}&from_lng=${boardStop.longitude}`);
+      const planResults = (planRes.data && planRes.data.results) || [];
+      const sampleHit = planResults.find(r => String(r.route_id) === String(sampleRoute.route_id) && Number(r.direction) === 1);
+      if (planRes.status === 200 && sampleHit && sampleHit.board_stop.stop_order < sampleHit.alight_stop.stop_order) {
+        logPass("API GET /trip-plan (có GPS)", `${planResults.length} tuyến; Tuyến ${sampleRoute.route_number} lên tại '${sampleHit.board_stop.stop_name}', xuống tại '${sampleHit.alight_stop.stop_name}' (${sampleHit.num_stops} trạm)`);
+      } else {
+        logFail("API GET /trip-plan (có GPS)", `Status ${planRes.status}, không thấy Tuyến ${sampleRoute.route_number} chiều đi trong kết quả`);
+      }
+
+      const wrongWay = planResults.filter(r => !r.board_stop || r.board_stop.stop_order >= r.alight_stop.stop_order);
+      if (planResults.length > 0 && wrongWay.length === 0) {
+        logPass("API GET /trip-plan (đúng chiều)", "Mọi kết quả đều lên xe trước khi xuống xe trên cùng chiều chạy");
+      } else {
+        logFail("API GET /trip-plan (đúng chiều)", `${wrongWay.length} kết quả sai chiều chạy`);
+      }
+
+      // Khách ở xa (~10 km): không giới hạn bán kính, vẫn liệt kê tuyến, trạm lên gần khách nhất xếp trước
+      const farRes = await fetchJson(`${API_BASE}/trip-plan?to_stop_id=${alightStop.stop_id}&from_lat=${boardStop.latitude + 0.09}&from_lng=${boardStop.longitude}`);
+      const farResults = (farRes.data && farRes.data.results) || [];
+      const farSorted = farResults.every((r, i) => i === 0 || farResults[i - 1].board_stop.walk_m <= r.board_stop.walk_m);
+      if (farRes.status === 200 && farResults.length > 0 && farSorted) {
+        logPass("API GET /trip-plan (khách ở xa)", `${farResults.length} tuyến, trạm lên gần nhất cách ${farResults[0].board_stop.walk_m} m`);
+      } else {
+        logFail("API GET /trip-plan (khách ở xa)", `Status ${farRes.status}, ${farResults.length} tuyến, sắp xếp đúng: ${farSorted}`);
+      }
+
+      // Không có GPS: liệt kê mọi tuyến dừng gần trạm đích
+      const noGpsRes = await fetchJson(`${API_BASE}/trip-plan?to_stop_id=${alightStop.stop_id}`);
+      const noGpsResults = (noGpsRes.data && noGpsRes.data.results) || [];
+      if (noGpsRes.status === 200 && noGpsRes.data.has_origin === false && noGpsResults.some(r => String(r.route_id) === String(sampleRoute.route_id))) {
+        logPass("API GET /trip-plan (không GPS)", `${noGpsResults.length} tuyến dừng gần trạm '${alightStop.stop_name}'`);
+      } else {
+        logFail("API GET /trip-plan (không GPS)", `Status ${noGpsRes.status}, thiếu Tuyến ${sampleRoute.route_number}`);
+      }
+    } else {
+      logFail("API GET /trip-plan", `Tuyến mẫu ${sampleRoute.route_number} không đủ trạm để kiểm thử`);
+    }
+
+    const missingDest = await fetchJson(`${API_BASE}/trip-plan`);
+    if (missingDest.status === 400) {
+      logPass("API GET /trip-plan (thiếu điểm đến)", "Từ chối với mã 400");
+    } else {
+      logFail("API GET /trip-plan (thiếu điểm đến)", `Mong đợi 400 nhưng nhận được ${missingDest.status}`);
+    }
   } catch (err) {
     logFail("Module RESTful APIs", err.message);
   }

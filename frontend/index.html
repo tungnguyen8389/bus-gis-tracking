@@ -26,8 +26,8 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
 
-    /* Cột bên trái (Sidebar): Điều khiển tuyến, tìm kiếm và bật/tắt lớp */
-    #routeControlPanel {
+    /* Cột bên trái (Sidebar): Điều khiển tuyến (admin/manager) hoặc Tìm tuyến (khách) */
+    #routeControlPanel, #guestTripPanel {
       position: absolute;
       top: 15px;
       left: 15px;
@@ -226,6 +226,82 @@
       transition: background 0.15s;
     }
     .stop-item:last-child { border-bottom: none; }
+
+    /* Tìm tuyến cho khách */
+    #destSuggestions {
+      display: none;
+      margin-top: 6px;
+      max-height: 240px;
+    }
+    #destSuggestions .stop-item { font-size: 12.5px; }
+    .trip-origin-status {
+      font-size: 12px;
+      color: #475569;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .trip-origin-status.ok { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+    .trip-origin-status.warn { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+    .trip-results {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .trip-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      color: #334155;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .trip-card:hover { border-color: #0079c1; }
+    .trip-card.active { border-color: #0079c1; box-shadow: 0 0 0 3px rgba(0, 121, 193, 0.15); }
+    .trip-card-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .trip-route-badge {
+      background: #0079c1;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      border-radius: 6px;
+      padding: 2px 8px;
+      flex-shrink: 0;
+    }
+    .trip-route-name {
+      font-weight: 600;
+      color: #1e293b;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .trip-step { display: flex; gap: 8px; align-items: baseline; margin-top: 3px; }
+    .trip-step i { width: 14px; text-align: center; color: #64748b; }
+    .trip-empty { padding: 12px; color: #94a3b8; text-align: center; font-size: 12.5px; }
+    .suggest-section {
+      padding: 5px 12px;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #0079c1;
+      background: #eff6ff;
+    }
     .stop-item:hover {
       background: #e0f2fe;
     }
@@ -411,7 +487,7 @@
   </div>
 
   <!-- CỘT BÊN TRÁI (SIDEBAR): DANH SÁCH TUYẾN, TÌM KIẾM TRẠM, BẬT/TẮT LỚP -->
-  <div id="routeControlPanel">
+  <div id="routeControlPanel" style="display: none;">
     <div class="panel-header">
       <h3><i class="fa-solid fa-bus"></i> LỘ TRÌNH XE BUÝT</h3>
       <span id="routeCountBadge" style="font-size: 11px; background: rgba(255,255,255,0.25); padding: 2px 6px; border-radius: 4px;">3 tuyến</span>
@@ -492,6 +568,37 @@
     </div>
   </div>
 
+  <!-- CỘT BÊN TRÁI CHO KHÁCH: NHẬP ĐIỂM ĐẾN → LIỆT KÊ TUYẾN ĐI THẲNG TỪ VỊ TRÍ HIỆN TẠI -->
+  <div id="guestTripPanel" style="display: none;">
+    <div class="panel-header">
+      <h3><i class="fa-solid fa-bus"></i> TÌM TUYẾN XE BUÝT</h3>
+    </div>
+
+    <div class="panel-body">
+      <div class="form-group">
+        <label for="destInput"><i class="fa-solid fa-flag-checkered"></i> Bạn muốn đến đâu?</label>
+        <div class="search-box">
+          <i class="fa-solid fa-search"></i>
+          <input type="text" id="destInput" placeholder="Nhập tên trạm hoặc địa chỉ (VD: Bến Thành)" autocomplete="off" oninput="renderDestSuggestions()" />
+        </div>
+        <ul class="stops-timeline" id="destSuggestions"></ul>
+      </div>
+
+      <div class="trip-origin-status" id="tripOriginStatus">
+        <i class="fa-solid fa-location-crosshairs"></i>
+        <span>Chọn điểm đến, hệ thống sẽ dùng vị trí hiện tại của bạn để tìm tuyến.</span>
+      </div>
+
+      <div class="section-title">
+        <span><i class="fa-solid fa-route"></i> TUYẾN XE PHÙ HỢP:</span>
+        <span id="tripResultsCount" style="font-weight: 600; color: #009688;"></span>
+      </div>
+      <ul class="trip-results" id="tripResults">
+        <li class="trip-empty">Chưa chọn điểm đến</li>
+      </ul>
+    </div>
+  </div>
+
   <!-- BẢNG ĐIỀU KHIỂN NỔI BÊN PHẢI: THÔNG TIN XE ĐANG CHỌN, VẬN TỐC, TRẠM TIẾP THEO -->
   <div id="fleetDashboard">
     <h4><i class="fa-solid fa-satellite-dish" style="color: #28a745;"></i> Theo dõi xe</h4>
@@ -555,6 +662,12 @@
     let currentDirection = 1;
     let mapView, routeLayer, stopsLayer, fleetLayer, GraphicClass, PointClass;
     let socketInstance = null;
+    let tripLayer = null;
+    let stopIndex = [];          // Danh sách trạm đã chuẩn hóa để gợi ý điểm đến (khách)
+    let streetIndex = new Map(); // Tên đường (chuẩn hóa) → các trạm trên đường đó
+    let streetKeys = [];         // Tên đường sắp xếp dài → ngắn để khớp cụm dài nhất trước
+    let lastTripResults = [];
+    let userPosition = null;     // { latitude, longitude, accuracy, time }
     let selectedTrackedVehicleId = null;
     const busGraphics = {};
 
@@ -654,7 +767,8 @@
       routeLayer = new GraphicsLayer({ title: "Lộ trình tim đường" });
       stopsLayer = new GraphicsLayer({ title: "Trạm đón trả khách" });
       fleetLayer = new GraphicsLayer({ title: "Đội xe buýt Realtime" });
-      map.addMany([routeLayer, stopsLayer, fleetLayer]);
+      tripLayer = new GraphicsLayer({ title: "Hành trình của khách" });
+      map.addMany([routeLayer, stopsLayer, tripLayer, fleetLayer]);
 
       // Lắng nghe sự kiện click chọn xe trên bản đồ
       mapView.on("click", function(event) {
@@ -668,8 +782,8 @@
         });
       });
 
-      // 3. Nạp dữ liệu bản đồ & kết nối realtime (không yêu cầu đăng nhập)
-      loadRoutesList();
+      // 3. Chọn sidebar theo vai trò, nạp dữ liệu bản đồ & kết nối realtime (không yêu cầu đăng nhập)
+      initSidebarForRole();
       initSocketRealtime();
     });
 
@@ -685,6 +799,359 @@
     }
 
     // --------------------------------------------------------------------
+    // CHỌN SIDEBAR THEO VAI TRÒ: ADMIN/MANAGER (token từ admin.html) → điều khiển tuyến, còn lại → tìm tuyến
+    // --------------------------------------------------------------------
+    async function isStaffViewer() {
+      const token = localStorage.getItem("bus_admin_token");
+      if (!token) return false;
+      try {
+        const res = await fetch(`${API_BASE}/auth/me`, { headers: { "Authorization": `Bearer ${token}` } });
+        if (!res.ok) return false;
+        const user = await res.json();
+        return user.role === "ADMIN" || user.role === "MANAGER";
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function initSidebarForRole() {
+      const isStaff = await isStaffViewer();
+      document.getElementById("routeControlPanel").style.display = isStaff ? "flex" : "none";
+      document.getElementById("guestTripPanel").style.display = isStaff ? "none" : "flex";
+      if (isStaff) {
+        loadRoutesList();
+      } else {
+        loadRoutesList(false);
+        loadStopIndex();
+      }
+    }
+
+    // --------------------------------------------------------------------
+    // TÌM TUYẾN CHO KHÁCH
+    // --------------------------------------------------------------------
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    // Bỏ dấu tiếng Việt để "ben thanh" khớp "Bến Thành"
+    function normalizeText(value) {
+      return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/\s+/g, " ").trim();
+    }
+
+    // --------------------------------------------------------------------
+    // KHỚP ĐỊA CHỈ KHÁCH NHẬP VỚI ĐỊA CHỈ TRẠM (không dùng geocode)
+    // Địa chỉ trạm có dạng "số nhà, tên đường, [phường], quận/huyện"
+    // --------------------------------------------------------------------
+    function streetKeyOf(value) {
+      return normalizeText(value).replace(/^duong\s+/, "");
+    }
+
+    // "Quận 5" → "5", "Quận Bình Thạnh" → "binh thanh", "TP. Thủ Đức - KV1" → "thu duc"
+    function districtKeyOf(value) {
+      return normalizeText(value)
+        .replace(/\s*-\s*kv\d+$/, "")
+        .replace(/^(quan|huyen|thanh pho|tp\.?|thi xa|tx\.?)\s*/, "")
+        .trim();
+    }
+
+    // Số nhà đầu tiên đứng riêng: "653 (291/8)" → 653, "Đối diện số 235" → 235, "A3/68A" → 68
+    function houseNumberOf(value) {
+      const m = normalizeText(value).match(/(?:^|[^a-z0-9])(\d+)/);
+      return m ? Number(m[1]) : null;
+    }
+
+    function parseStopAddress(address) {
+      const parts = String(address || "").split(",").map(p => p.trim()).filter(Boolean);
+      return {
+        houseNumber: parts.length >= 3 ? houseNumberOf(parts[0]) : null,
+        streetKey: parts.length >= 3 ? streetKeyOf(parts[1]) : null,
+        districtKey: parts.length >= 2 ? districtKeyOf(parts[parts.length - 1]) : null
+      };
+    }
+
+    function buildStreetIndex() {
+      streetIndex = new Map();
+      stopIndex.forEach(st => {
+        if (!st.streetKey || st.streetKey.length < 3 || /^\d+$/.test(st.streetKey)) return;
+        if (!streetIndex.has(st.streetKey)) streetIndex.set(st.streetKey, []);
+        streetIndex.get(st.streetKey).push(st);
+      });
+      streetKeys = [...streetIndex.keys()].sort((a, b) => b.length - a.length);
+    }
+
+    // "220 Nguyễn Văn Cừ Q5" → các trạm trên Nguyễn Văn Cừ (Quận 5) có số nhà gần 220 nhất
+    function findStopsByAddress(input) {
+      const query = normalizeText(input)
+        .replace(/[,;]/g, " ")
+        .replace(/\bq\.?\s*(\d+)\b/g, "quan $1")
+        .replace(/\s+/g, " ")
+        .trim();
+      const padded = ` ${query} `;
+      const streetKey = streetKeys.find(key => padded.includes(` ${key} `));
+      if (!streetKey) return null;
+
+      const numberMatch = query.match(/^(?:so\s*)?(\d+)/);
+      const houseNumber = numberMatch ? Number(numberMatch[1]) : null;
+
+      // Lọc theo quận nếu khách có nhập (cùng tên đường có thể nằm ở nhiều quận, số nhà đánh riêng)
+      let candidates = streetIndex.get(streetKey);
+      const rest = ` ${padded.replace(` ${streetKey} `, " ").replace(/^\s*(?:so\s*)?\d+\S*/, " ")} `;
+      const inDistrict = candidates.filter(st => st.districtKey && (/^\d+$/.test(st.districtKey)
+        ? rest.includes(` quan ${st.districtKey} `)
+        : rest.includes(` ${st.districtKey} `)));
+      if (inDistrict.length > 0) candidates = inDistrict;
+
+      let ranked = houseNumber === null
+        ? [...candidates].sort((a, b) => (a.houseNumber ?? Infinity) - (b.houseNumber ?? Infinity))
+        : candidates
+            .filter(st => st.houseNumber !== null)
+            .sort((a, b) => Math.abs(a.houseNumber - houseNumber) - Math.abs(b.houseNumber - houseNumber));
+
+      // Không nhập quận mà đường có ở nhiều quận/tỉnh (VD Lê Lợi Quận 1 và Vũng Tàu): mỗi nơi lấy trạm gần nhất
+      if (inDistrict.length === 0 && houseNumber !== null) {
+        const seen = new Set();
+        ranked = ranked.filter(st => !seen.has(st.districtKey) && seen.add(st.districtKey));
+      }
+      return { houseNumber, stops: ranked.slice(0, houseNumber === null ? 5 : 3) };
+    }
+
+    async function loadStopIndex() {
+      try {
+        const res = await fetch(`${API_BASE}/stops`);
+        const data = await res.json();
+        stopIndex = (data.features || []).map(f => ({
+          stop_id: f.properties.stop_id,
+          stop_name: f.properties.stop_name,
+          address: f.properties.address,
+          longitude: f.geometry.coordinates[0],
+          latitude: f.geometry.coordinates[1],
+          nameKey: normalizeText(f.properties.stop_name),
+          searchKey: normalizeText(`${f.properties.stop_name} ${f.properties.address || ""}`),
+          ...parseStopAddress(f.properties.address)
+        }));
+        buildStreetIndex();
+        renderDestSuggestions();
+      } catch (e) {
+        showToast("Không tải được danh sách trạm. Kiểm tra kết nối máy chủ.", "error");
+      }
+    }
+
+    function renderDestSuggestions() {
+      const list = document.getElementById("destSuggestions");
+      const keyword = normalizeText(document.getElementById("destInput").value);
+      list.innerHTML = "";
+      if (!keyword) {
+        list.style.display = "none";
+        return;
+      }
+
+      // Xếp hạng: tên bắt đầu bằng từ khóa > tên chứa cụm từ khóa > tên chứa đủ các từ > chỉ khớp địa chỉ
+      const tokens = keyword.split(" ");
+      const rank = s => s.nameKey.startsWith(keyword) ? 0
+        : s.nameKey.includes(keyword) ? 1
+        : tokens.every(t => s.nameKey.includes(t)) ? 2 : 3;
+      const matches = stopIndex
+        .filter(s => tokens.every(t => s.searchKey.includes(t)))
+        .map(s => ({ s, r: rank(s) }))
+        .sort((a, b) => a.r - b.r || a.s.stop_name.localeCompare(b.s.stop_name, "vi"))
+        .slice(0, 20)
+        .map(m => m.s);
+
+      const addressMatch = findStopsByAddress(keyword);
+      const addressStops = addressMatch ? addressMatch.stops : [];
+      const addressIds = new Set(addressStops.map(st => st.stop_id));
+      const nameStops = matches.filter(st => !addressIds.has(st.stop_id));
+
+      list.style.display = "block";
+      if (addressStops.length === 0 && nameStops.length === 0) {
+        list.innerHTML = `<li class="trip-empty">${stopIndex.length ? "Không tìm thấy trạm phù hợp" : "Đang tải danh sách trạm..."}</li>`;
+        return;
+      }
+
+      const addSection = title => {
+        const li = document.createElement("li");
+        li.className = "suggest-section";
+        li.textContent = title;
+        list.appendChild(li);
+      };
+      const addStop = (st, icon, note) => {
+        const li = document.createElement("li");
+        li.className = "stop-item";
+        li.innerHTML = `
+          <i class="fa-solid ${icon}" style="color: #009688;"></i>
+          <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <div style="font-weight: 600; color: #1e293b;">${escapeHtml(st.stop_name)}</div>
+            <div style="font-size: 11px; color: #64748b;">${escapeHtml(st.address || st.stop_id)}</div>
+            ${note ? `<div style="font-size: 11px; color: #0079c1;">${escapeHtml(note)}</div>` : ""}
+          </div>`;
+        li.onclick = () => selectDestination(st);
+        list.appendChild(li);
+      };
+
+      if (addressStops.length > 0) {
+        addSection("Gần địa chỉ bạn nhập");
+        addressStops.forEach(st => {
+          const diff = addressMatch.houseNumber === null ? null : Math.abs(st.houseNumber - addressMatch.houseNumber);
+          const note = diff === null ? "" : diff === 0 ? "Đúng số nhà bạn nhập" : `≈ lệch ${diff} số nhà so với số ${addressMatch.houseNumber}`;
+          addStop(st, "fa-house-flag", note);
+        });
+        if (nameStops.length > 0) addSection("Trạm theo tên");
+      }
+      nameStops.forEach(st => addStop(st, "fa-location-dot"));
+    }
+
+    function formatDistance(meters) {
+      return meters >= 1000 ? `${(meters / 1000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} km` : `${meters} m`;
+    }
+
+    function setOriginStatus(type, message) {
+      const box = document.getElementById("tripOriginStatus");
+      const icon = type === "ok" ? "fa-location-dot" : type === "warn" ? "fa-triangle-exclamation" : "fa-spinner fa-spin";
+      box.className = `trip-origin-status ${type}`;
+      box.innerHTML = `<i class="fa-solid ${icon}"></i><span>${escapeHtml(message)}</span>`;
+    }
+
+    // Lấy vị trí hiện tại (dùng lại kết quả trong 60 giây); trả null nếu khách từ chối / lỗi
+    function getUserPosition() {
+      if (userPosition && Date.now() - userPosition.time < 60000) return Promise.resolve(userPosition);
+      if (!navigator.geolocation) return Promise.resolve(null);
+      return new Promise(resolve => {
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            userPosition = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy, time: Date.now() };
+            resolve(userPosition);
+          },
+          err => {
+            console.warn("Không lấy được vị trí:", err);
+            showToast(geolocationErrorMessage(err), "warning");
+            resolve(null);
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+        );
+      });
+    }
+
+    function addTripMarker(longitude, latitude, color, title, content) {
+      if (!GraphicClass || !tripLayer) return;
+      tripLayer.add(new GraphicClass({
+        geometry: { type: "point", longitude, latitude },
+        symbol: { type: "simple-marker", color, size: "16px", outline: { color: [255, 255, 255], width: 2.5 } },
+        attributes: { title },
+        popupTemplate: { title, content: content || "" }
+      }));
+    }
+
+    async function selectDestination(stop) {
+      document.getElementById("destInput").value = stop.stop_name;
+      document.getElementById("destSuggestions").style.display = "none";
+
+      const resultsEl = document.getElementById("tripResults");
+      resultsEl.innerHTML = `<li class="trip-empty"><i class="fa-solid fa-spinner fa-spin"></i> Đang tìm tuyến...</li>`;
+      document.getElementById("tripResultsCount").innerText = "";
+      setOriginStatus("", "Đang xác định vị trí của bạn...");
+
+      const position = await getUserPosition();
+      const params = new URLSearchParams({ to_stop_id: stop.stop_id });
+      if (position) {
+        params.set("from_lat", position.latitude);
+        params.set("from_lng", position.longitude);
+        setOriginStatus("ok", `Đã xác định vị trí của bạn (sai số ~${Math.round(position.accuracy)} m)`);
+      } else {
+        setOriginStatus("warn", "Chưa có vị trí. Bật định vị để lọc tuyến đi từ vị trí của bạn; đang hiển thị mọi tuyến qua điểm đến.");
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/trip-plan?${params}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        renderTripResults(data, position);
+      } catch (e) {
+        resultsEl.innerHTML = `<li class="trip-empty">Không tìm được tuyến: ${escapeHtml(e.message)}</li>`;
+      }
+    }
+
+    function renderTripResults(data, position) {
+      lastTripResults = data.results || [];
+      const resultsEl = document.getElementById("tripResults");
+      document.getElementById("tripResultsCount").innerText = `${lastTripResults.length} tuyến`;
+
+      // Vẽ lại điểm xuất phát / điểm đến, chưa chọn tuyến cụ thể
+      currentSelectedRoute = "ALL";
+      currentRawStops = [];
+      applyFleetFilter();
+      if (routeLayer) routeLayer.removeAll();
+      if (stopsLayer) stopsLayer.removeAll();
+      if (tripLayer) tripLayer.removeAll();
+      const dest = data.destination;
+      addTripMarker(dest.longitude, dest.latitude, [220, 38, 38], `Điểm đến: ${dest.stop_name}`, escapeHtml(dest.address || ""));
+      const focus = [[dest.longitude, dest.latitude]];
+      if (position) {
+        addTripMarker(position.longitude, position.latitude, [37, 99, 235], "Vị trí của bạn");
+        focus.push([position.longitude, position.latitude]);
+      }
+      goToSequential(focus.length > 1 ? focus : { center: focus[0], zoom: 16 }, { duration: 700 });
+
+      if (lastTripResults.length === 0) {
+        resultsEl.innerHTML = `<li class="trip-empty">Không có tuyến xe buýt đi thẳng tới điểm đến này.</li>`;
+        return;
+      }
+
+      resultsEl.innerHTML = "";
+      lastTripResults.forEach((r, idx) => {
+        const li = document.createElement("li");
+        li.className = "trip-card";
+        const dirLabel = Number(r.direction) === 1 ? "Lượt đi" : "Lượt về";
+        const boardStep = r.board_stop
+          ? `<div class="trip-step"><i class="fa-solid fa-person-walking"></i><span>Lên xe tại trạm <b>${escapeHtml(r.board_stop.stop_name)}</b> (cách bạn ${formatDistance(r.board_stop.walk_m)})</span></div>
+             <div class="trip-step"><i class="fa-solid fa-bus"></i><span>Đi ${r.num_stops} trạm</span></div>`
+          : "";
+        const alightWalk = r.alight_stop.walk_m > 0 ? ` (cách điểm đến ${formatDistance(r.alight_stop.walk_m)})` : "";
+        li.innerHTML = `
+          <div class="trip-card-head">
+            <span class="trip-route-badge">${escapeHtml(r.route_number)}</span>
+            <span class="trip-route-name" title="${escapeHtml(r.route_name)}">${escapeHtml(r.route_name)}</span>
+          </div>
+          <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">${dirLabel}</div>
+          ${boardStep}
+          <div class="trip-step"><i class="fa-solid fa-flag-checkered"></i><span>Xuống tại <b>${escapeHtml(r.alight_stop.stop_name)}</b>${alightWalk}</span></div>`;
+        li.onclick = () => {
+          resultsEl.querySelectorAll(".trip-card").forEach(c => c.classList.remove("active"));
+          li.classList.add("active");
+          showTripOnMap(lastTripResults[idx], data.destination, position);
+        };
+        resultsEl.appendChild(li);
+      });
+    }
+
+    // Vẽ lộ trình tuyến đã chọn + đánh dấu trạm lên / xuống, chỉ hiện xe của tuyến đó
+    async function showTripOnMap(result, dest, position) {
+      currentSelectedRoute = result.route_id;
+      currentDirection = Number(result.direction);
+      applyFleetFilter();
+      await loadSingleRouteData(result.route_id, currentDirection);
+
+      if (tripLayer) tripLayer.removeAll();
+      addTripMarker(dest.longitude, dest.latitude, [220, 38, 38], `Điểm đến: ${dest.stop_name}`, escapeHtml(dest.address || ""));
+      if (position) addTripMarker(position.longitude, position.latitude, [37, 99, 235], "Vị trí của bạn");
+      if (result.board_stop) {
+        addTripMarker(result.board_stop.longitude, result.board_stop.latitude, [22, 163, 74], `Lên xe: ${result.board_stop.stop_name}`, `Tuyến ${escapeHtml(result.route_number)}`);
+      }
+      addTripMarker(result.alight_stop.longitude, result.alight_stop.latitude, [234, 88, 12], `Xuống xe: ${result.alight_stop.stop_name}`, `Tuyến ${escapeHtml(result.route_number)}`);
+    }
+
+    // ArcGIS 4.29 ném lỗi "reading 'animation'" nếu goTo chạy trước khi view sẵn sàng
+    // → chờ mapView.when() và xếp hàng các goTo tuần tự để không cắt ngang nhau
+    let goToChain = Promise.resolve();
+    function goToSequential(target, options) {
+      if (!mapView) return goToChain;
+      goToChain = goToChain
+        .then(() => mapView.when())
+        .then(() => mapView.goTo(target, options))
+        .catch(err => console.warn("Không thể di chuyển bản đồ:", err));
+      return goToChain;
+    }
+
+    // --------------------------------------------------------------------
     // BẬT / TẮT LỚP HIỂN THỊ
     // --------------------------------------------------------------------
     function toggleLayer(layerType, isVisible) {
@@ -696,7 +1163,7 @@
     // --------------------------------------------------------------------
     // NẠP DANH SÁCH TUYẾN & XỬ LÝ CHỌN TUYẾN
     // --------------------------------------------------------------------
-    async function loadRoutesList() {
+    async function loadRoutesList(autoSelect = true) {
       try {
         const res = await fetch(`${API_BASE}/routes`);
         allRoutes = await res.json();
@@ -710,6 +1177,7 @@
 
         document.getElementById("routeCountBadge").innerText = `${allRoutes.length} tuyến`;
 
+        if (!autoSelect) return;
         if (allRoutes.length > 0) {
           select.value = allRoutes[0].route_id;
           onRouteChanged();
@@ -751,7 +1219,11 @@
         loadSingleRouteData(currentSelectedRoute, currentDirection);
       }
 
-      // Cập nhật hiển thị xe buýt tức thì phù hợp với tuyến đang chọn
+      applyFleetFilter();
+    }
+
+    // Cập nhật hiển thị xe buýt tức thì phù hợp với tuyến đang chọn
+    function applyFleetFilter() {
       Object.keys(busGraphics).forEach(vehId => {
         const g = busGraphics[vehId];
         if (g && g.attributes) {
@@ -779,7 +1251,7 @@
           routeLayer.add(routePolyline);
 
           if (mapView && coords.length > 0) {
-            mapView.goTo(coords, { duration: 800 });
+            goToSequential(coords, { duration: 800 });
           }
         }
       } catch (e) {}
