@@ -439,10 +439,74 @@
       color: #7dd3fc;
     }
 
+    /* ==================================================================== */
+    /* MODAL ĐĂNG NHẬP QUẢN TRỊ (ADMIN / MANAGER) */
+    /* ==================================================================== */
+    #loginModal {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(15, 23, 42, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #loginModal.open { display: flex; }
+    .login-card {
+      width: 100%;
+      max-width: 360px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+      overflow: hidden;
+    }
+    .login-card form { padding: 16px; }
+    .login-card .form-group input {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1.5px solid #cbd5e1;
+      font-size: 13.5px;
+      outline: none;
+    }
+    .login-card .form-group input:focus {
+      border-color: #0079c1;
+      box-shadow: 0 0 0 3px rgba(0, 121, 193, 0.15);
+    }
+    .login-close {
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .login-alert {
+      display: none;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .login-submit {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: #0079c1;
+      color: #fff;
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .login-submit:disabled { opacity: 0.6; cursor: wait; }
+
     /* Toast Container */
     #toastContainer {
       position: fixed;
-      top: 20px;
+      top: 60px; /* dưới thanh nút Đăng nhập / Quản Trị */
       right: 20px;
       z-index: 10000;
       display: flex;
@@ -479,11 +543,41 @@
   <!-- TOAST NOTIFICATIONS -->
   <div id="toastContainer"></div>
 
-  <!-- NÚT VÀO TRANG QUẢN TRỊ (TOP-RIGHT) - đăng nhập admin thực hiện tại admin.html -->
+  <!-- GÓC TRÊN PHẢI: chưa đăng nhập → nút Đăng nhập; đã đăng nhập (ADMIN/MANAGER) → Quản Trị + Đăng xuất -->
   <div id="userProfileBar">
-    <a href="admin.html" target="_blank" id="btnTopAdminPortal" class="btn-top-action btn-admin">
+    <button type="button" id="btnOpenLogin" class="btn-top-action btn-admin" onclick="openLoginModal()" style="display: none;">
+      <i class="fa-solid fa-right-to-bracket"></i> Đăng nhập
+    </button>
+    <a href="admin.html" target="_blank" id="btnTopAdminPortal" class="btn-top-action btn-admin" style="display: none;">
       <i class="fa-solid fa-sliders"></i> Quản Trị
     </a>
+    <button type="button" id="btnLogout" class="btn-top-action" onclick="logoutStaff()" style="display: none;">
+      <i class="fa-solid fa-right-from-bracket"></i> Đăng xuất
+    </button>
+  </div>
+
+  <!-- MODAL ĐĂNG NHẬP QUẢN TRỊ: đăng nhập ngay trên trang bản đồ -->
+  <div id="loginModal" onclick="if (event.target === this) closeLoginModal()">
+    <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+      <div class="panel-header">
+        <h3 id="loginTitle"><i class="fa-solid fa-user-shield"></i> ĐĂNG NHẬP QUẢN TRỊ</h3>
+        <button type="button" class="login-close" onclick="closeLoginModal()" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <form onsubmit="handleStaffLogin(event)">
+        <div class="login-alert" id="loginAlert"></div>
+        <div class="form-group">
+          <label for="loginUsername">Tên đăng nhập</label>
+          <input type="text" id="loginUsername" autocomplete="username" required />
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Mật khẩu</label>
+          <input type="password" id="loginPassword" autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="login-submit" id="btnLoginSubmit">
+          <i class="fa-solid fa-right-to-bracket"></i> Đăng nhập
+        </button>
+      </form>
+    </div>
   </div>
 
   <!-- CỘT BÊN TRÁI (SIDEBAR): DANH SÁCH TUYẾN, TÌM KIẾM TRẠM, BẬT/TẮT LỚP -->
@@ -649,7 +743,7 @@
       </div>
     </div>
 
-    <a href="admin.html" target="_blank" class="btn-admin-link" id="btnBottomAdminLink">
+    <a href="admin.html" target="_blank" class="btn-admin-link" id="btnBottomAdminLink" style="display: none;">
       <i class="fa-solid fa-sliders"></i> Mở Trang Quản Trị (Admin Portal)
     </a>
   </div>
@@ -799,31 +893,110 @@
     }
 
     // --------------------------------------------------------------------
-    // CHỌN SIDEBAR THEO VAI TRÒ: ADMIN/MANAGER (token từ admin.html) → điều khiển tuyến, còn lại → tìm tuyến
+    // ĐĂNG NHẬP QUẢN TRỊ & CHỌN SIDEBAR THEO VAI TRÒ
+    // ADMIN/MANAGER → điều khiển tuyến + nút Quản Trị, còn lại (khách) → tìm tuyến + nút Đăng nhập.
+    // Token dùng chung khóa bus_admin_token với admin.html nên mở trang quản trị không phải đăng nhập lại.
     // --------------------------------------------------------------------
-    async function isStaffViewer() {
+    function isStaffRole(user) {
+      return !!user && (user.role === "ADMIN" || user.role === "MANAGER");
+    }
+
+    async function getStaffUser() {
       const token = localStorage.getItem("bus_admin_token");
-      if (!token) return false;
+      if (!token) return null;
       try {
         const res = await fetch(`${API_BASE}/auth/me`, { headers: { "Authorization": `Bearer ${token}` } });
-        if (!res.ok) return false;
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) localStorage.removeItem("bus_admin_token");
+          return null;
+        }
         const user = await res.json();
-        return user.role === "ADMIN" || user.role === "MANAGER";
+        return isStaffRole(user) ? user : null;
       } catch (e) {
-        return false;
+        return null;
+      }
+    }
+
+    function applyAuthState(user) {
+      const isStaff = isStaffRole(user);
+      const show = (id, visible, display = "flex") => {
+        document.getElementById(id).style.display = visible ? display : "none";
+      };
+      show("btnOpenLogin", !isStaff);
+      show("btnTopAdminPortal", isStaff);
+      show("btnLogout", isStaff);
+      show("btnBottomAdminLink", isStaff, "block");
+      show("routeControlPanel", isStaff);
+      show("guestTripPanel", !isStaff);
+
+      if (tripLayer) tripLayer.removeAll();
+      if (isStaff) {
+        loadRoutesList();
+      } else {
+        // Trả bản đồ về trạng thái khách: chưa chọn tuyến, hiện mọi xe
+        currentSelectedRoute = "ALL";
+        currentRawStops = [];
+        if (routeLayer) routeLayer.removeAll();
+        if (stopsLayer) stopsLayer.removeAll();
+        applyFleetFilter();
+        if (allRoutes.length === 0) loadRoutesList(false);
+        if (stopIndex.length === 0) loadStopIndex();
       }
     }
 
     async function initSidebarForRole() {
-      const isStaff = await isStaffViewer();
-      document.getElementById("routeControlPanel").style.display = isStaff ? "flex" : "none";
-      document.getElementById("guestTripPanel").style.display = isStaff ? "none" : "flex";
-      if (isStaff) {
-        loadRoutesList();
-      } else {
-        loadRoutesList(false);
-        loadStopIndex();
+      applyAuthState(await getStaffUser());
+    }
+
+    function openLoginModal() {
+      document.getElementById("loginAlert").style.display = "none";
+      document.getElementById("loginPassword").value = "";
+      document.getElementById("loginModal").classList.add("open");
+      document.getElementById("loginUsername").focus();
+    }
+
+    function closeLoginModal() {
+      document.getElementById("loginModal").classList.remove("open");
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && document.getElementById("loginModal").classList.contains("open")) closeLoginModal();
+    });
+
+    async function handleStaffLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById("btnLoginSubmit");
+      const alertBox = document.getElementById("loginAlert");
+      alertBox.style.display = "none";
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("loginUsername").value.trim(),
+            password: document.getElementById("loginPassword").value
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || !isStaffRole(data.user)) throw new Error(data.error || "Đăng nhập thất bại");
+
+        localStorage.setItem("bus_admin_token", data.token);
+        closeLoginModal();
+        applyAuthState(data.user);
+        showToast(`Xin chào ${data.user.full_name || data.user.username}!`, "success");
+      } catch (err) {
+        alertBox.textContent = err.message === "Failed to fetch" ? "Không thể kết nối đến máy chủ (Port 3000)" : err.message;
+        alertBox.style.display = "block";
+      } finally {
+        btn.disabled = false;
       }
+    }
+
+    function logoutStaff() {
+      localStorage.removeItem("bus_admin_token");
+      applyAuthState(null);
+      showToast("Đã đăng xuất.", "info");
     }
 
     // --------------------------------------------------------------------
