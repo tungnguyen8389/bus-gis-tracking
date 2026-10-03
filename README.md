@@ -14,7 +14,15 @@ Bus_project/
 ├── backend/
 │   ├── .env                        # File cấu hình môi trường (Port, DB connection)
 │   ├── package.json                # Dependencies Express, Socket.io, MySQL2
-│   ├── server.js                   # REST API GeoJSON & Socket.io Realtime Hub
+│   ├── server.js                   # Entry: khởi tạo HTTP server, Socket.io, CSDL và listen
+│   ├── src/
+│   │   ├── app.js                  # Express app: middleware chung + mount router các module dưới /api/v1
+│   │   ├── config/                 # env.js (biến môi trường), db.js (MySQL pool + initDatabase)
+│   │   ├── middleware/auth.js      # authenticateToken (JWT), requireAdmin
+│   │   ├── modules/                # Mỗi feature: <tên>.routes.js + <tên>.controller.js (+ .service.js)
+│   │   │   ├── auth/  users/  bus-routes/  paths/  stops/  trip-plan/
+│   │   │   └── vehicles/  schedules/  admin-stats/  import-export/
+│   │   └── sockets/tracking.socket.js # Hub realtime: gps_ping → fleet_location_update + ghi log
 │   ├── simulator.js                # Bộ phát GPS giả lập lộ trình xe buýt (đang tạm tắt)
 │   └── scripts/                    # db:import / db:export busdata.sql
 ├── docs/
