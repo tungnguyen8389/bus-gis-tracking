@@ -11,6 +11,15 @@ function postJson(path, body) {
   });
 }
 
+// Trì hoãn gọi fn cho tới khi ngừng kích hoạt ms mili-giây (ô tìm kiếm, kéo bản đồ)
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
 // Danh sách <option> cho dropdown chọn tuyến
 function routeOptionsHtml(routes) {
   return routes

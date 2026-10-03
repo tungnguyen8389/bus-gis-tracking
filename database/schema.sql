@@ -110,8 +110,10 @@ CREATE TABLE vehicle_tracking_logs (
 ) ENGINE=InnoDB;
 
 -- ====================================================================
--- SEED DỮ LIỆU MẪU KHU VỰC ĐẠI HỌC QUỐC GIA TP.HCM
+-- SEED TÀI KHOẢN NGƯỜI DÙNG
 -- ====================================================================
+-- Dữ liệu tuyến / trạm / lộ trình TP.HCM được nạp riêng từ database/busdata:
+--   cd backend && npm run seed:busdata
 
 -- Nạp Tài khoản Quản trị & Người dùng Khách mẫu (Mật khẩu: admin123 / manager123 / khach123)
 INSERT INTO users (username, password_hash, full_name, email, role) VALUES
@@ -119,59 +121,3 @@ INSERT INTO users (username, password_hash, full_name, email, role) VALUES
 ('manager', '$2b$10$PuxC1Sqo0DlyCRYGpQj8buYs8D0JMXfx.921s1thBPsbnW1aIS7Om', 'Quản lý Điều hành', 'manager@busgis.vn', 'MANAGER'),
 ('khach', '$2b$10$wN9F4G2rNqFp3H7qN8V4.OSgYf81K7nFzL73jJb0qW12L90M81L4.', 'Khách Tham Quan', 'khach@busgis.vn', 'VIEWER'),
 ('viewer', '$2b$10$wN9F4G2rNqFp3H7qN8V4.OSgYf81K7nFzL73jJb0qW12L90M81L4.', 'Người dùng Viewer', 'viewer@busgis.vn', 'VIEWER');
-
--- Nạp Danh sách Tuyến xe buýt
-INSERT INTO bus_routes (route_id, route_number, route_name, distance_km, headway_min) VALUES
-('BUS_01', '08', 'Bến xe Buýt ĐHQG - Bến Thành', 15.5, 10),
-('BUS_02', '10', 'ĐHQG - Bến xe Miền Tây', 28.0, 15),
-('BUS_03', '53', 'Lê Hồng Phong - ĐHQG', 22.0, 12);
-
--- Nạp Trạm dừng (Point WGS84)
-INSERT INTO bus_stops (stop_id, stop_name, address, geom) VALUES
-('ST_01', 'Trạm KTX Khu A', 'Đường Tạ Quang Bửu', ST_GeomFromText('POINT(106.795000 10.863000)', 4326)),
-('ST_02', 'Trạm ĐH Khoa học Tự nhiên', 'Đường Vành Đai', ST_GeomFromText('POINT(106.800000 10.870000)', 4326)),
-('ST_03', 'Trạm Thư viện Trung tâm', 'Khu trung tâm ĐHQG', ST_GeomFromText('POINT(106.801960 10.870525)', 4326)),
-('ST_04', 'Trạm ĐH Quốc Tế', 'Đường Quảng Trường Sáng Tạo', ST_GeomFromText('POINT(106.803300 10.877800)', 4326)),
-('ST_05', 'Trạm ĐH Bách Khoa CS2', 'Đường Lê Quý Đôn', ST_GeomFromText('POINT(106.805500 10.868500)', 4326)),
-('ST_06', 'Trạm ĐH Công Nghệ Thông Tin', 'Đường Hàn Thuyên', ST_GeomFromText('POINT(106.801000 10.869000)', 4326)),
-('ST_07', 'Trạm KTX Khu B', 'Đường Tô Vĩnh Diện', ST_GeomFromText('POINT(106.809000 10.879000)', 4326)),
-('ST_08', 'Trạm ĐH Khoa học Xã hội & Nhân văn', 'Đường Lưu Hữu Phước', ST_GeomFromText('POINT(106.802000 10.873000)', 4326));
-
--- Nạp Lộ trình tim đường (LineString WGS84)
-INSERT INTO route_paths (route_id, direction, geom) VALUES
-('BUS_01', 1, ST_GeomFromText('LINESTRING(106.795000 10.863000, 106.798000 10.866000, 106.800000 10.870000, 106.801960 10.870525, 106.803300 10.877800, 106.805500 10.868500)', 4326)),
-('BUS_01', 2, ST_GeomFromText('LINESTRING(106.805500 10.868500, 106.803300 10.877800, 106.801960 10.870525, 106.800000 10.870000, 106.798000 10.866000, 106.795000 10.863000)', 4326)),
-('BUS_02', 1, ST_GeomFromText('LINESTRING(106.795000 10.863000, 106.801000 10.869000, 106.801960 10.870525, 106.809000 10.879000)', 4326)),
-('BUS_03', 1, ST_GeomFromText('LINESTRING(106.802000 10.873000, 106.803300 10.877800, 106.805500 10.868500, 106.809000 10.879000)', 4326));
-
--- Gán thứ tự đón khách
-INSERT INTO route_stops (route_id, stop_id, direction, stop_order) VALUES
-('BUS_01', 'ST_01', 1, 1),
-('BUS_01', 'ST_02', 1, 2),
-('BUS_01', 'ST_03', 1, 3),
-('BUS_01', 'ST_04', 1, 4),
-('BUS_01', 'ST_05', 1, 5),
-('BUS_02', 'ST_01', 1, 1),
-('BUS_02', 'ST_06', 1, 2),
-('BUS_02', 'ST_03', 1, 3),
-('BUS_02', 'ST_07', 1, 4),
-('BUS_03', 'ST_08', 1, 1),
-('BUS_03', 'ST_04', 1, 2),
-('BUS_03', 'ST_05', 1, 3),
-('BUS_03', 'ST_07', 1, 4);
-
--- Nạp Xe buýt
-INSERT INTO vehicles (vehicle_id, plate_number, capacity, driver_name, status) VALUES
-('BUS_51B_01', '51B-123.45', 45, 'Nguyễn Văn A', 'ACTIVE'),
-('BUS_51B_02', '51B-678.90', 45, 'Trần Văn B', 'ACTIVE'),
-('BUS_51B_03', '51B-888.99', 45, 'Lê Văn C', 'ACTIVE'),
-('BUS_51B_04', '51B-456.78', 45, 'Phạm Văn D', 'ACTIVE');
-
--- Nạp Phân công Chuyến xe & Lịch trình khởi hành mẫu
-INSERT INTO schedules (route_id, vehicle_id, departure_time, direction) VALUES
-('BUS_01', 'BUS_51B_01', '06:00:00', 1),
-('BUS_01', 'BUS_51B_02', '06:30:00', 1),
-('BUS_01', 'BUS_51B_01', '07:15:00', 2),
-('BUS_02', 'BUS_51B_03', '06:15:00', 1),
-('BUS_03', 'BUS_51B_04', '06:45:00', 1);
-

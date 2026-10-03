@@ -4,6 +4,7 @@
 const ALL_STOPS_TABLE_HEADER = `
   <th>Mã trạm</th>
   <th>Tên trạm dừng</th>
+  <th>Loại / Trạng thái</th>
   <th>Địa chỉ / Vị trí</th>
   <th>Kinh độ (Lon)</th>
   <th>Vĩ độ (Lat)</th>
@@ -32,8 +33,46 @@ async function loadRoutesForFilter() {
 function onStopFilterChanged() {
   const isAll = document.getElementById("stop_filter_route").value === "ALL";
   document.getElementById("stop_filter_dir_group").style.display = isAll ? "none" : "flex";
+  document.getElementById("stop_search_group").style.display = isAll ? "flex" : "none";
   document.getElementById("btnAssignStop").style.display = isAll ? "none" : "inline-flex";
+  stopsPage = 1;
   loadStops();
+}
+
+// Phân trang & tìm kiếm ở chế độ "Tất cả các trạm" (gọi server, không tải toàn bộ ~6.000 trạm)
+const STOPS_PAGE_SIZE = 50;
+let stopsPage = 1;
+let stopsTotal = 0;
+let currentStopsPage = [];
+
+const onStopSearchInput = debounce(() => {
+  stopsPage = 1;
+  loadStops();
+}, 300);
+
+function changeStopsPage(delta) {
+  const totalPages = Math.max(Math.ceil(stopsTotal / STOPS_PAGE_SIZE), 1);
+  const next = stopsPage + delta;
+  if (next < 1 || next > totalPages) return;
+  stopsPage = next;
+  loadStops();
+}
+
+function renderStopsPager(isVisible) {
+  document.getElementById("stops-pager").style.display = isVisible ? "flex" : "none";
+  if (!isVisible) return;
+  const totalPages = Math.max(Math.ceil(stopsTotal / STOPS_PAGE_SIZE), 1);
+  const from = stopsTotal === 0 ? 0 : (stopsPage - 1) * STOPS_PAGE_SIZE + 1;
+  const to = Math.min(stopsPage * STOPS_PAGE_SIZE, stopsTotal);
+  document.getElementById("stops-pager-info").innerText = `Hiển thị ${from}–${to} / ${stopsTotal} trạm · Trang ${stopsPage}/${totalPages}`;
+  document.getElementById("stops-pager-prev").disabled = stopsPage <= 1;
+  document.getElementById("stops-pager-next").disabled = stopsPage >= totalPages;
+}
+
+function stopStatusBadgeHtml(p) {
+  const isActive = !p.status || p.status === STOP_STATUS_ACTIVE;
+  return `<div style="font-size: 12px; color: #64748b;">${p.stop_type || "---"}</div>` +
+    `<span class="badge ${isActive ? "badge-active" : "badge-inactive"}">${p.status || STOP_STATUS_ACTIVE}</span>`;
 }
 
 function stopFeatureRowHtml(f) {
@@ -41,8 +80,9 @@ function stopFeatureRowHtml(f) {
   const coords = f.geometry.coordinates;
   return `
     <tr>
-      <td><b>${p.stop_id}</b></td>
+      <td><b>${p.stop_code || p.stop_id}</b><div style="font-size: 11px; color: #94a3b8;">ID ${p.stop_id}</div></td>
       <td>${p.stop_name}</td>
+      <td>${stopStatusBadgeHtml(p)}</td>
       <td>${p.address || "---"}</td>
       <td>${coords[0].toFixed(6)}</td>
       <td>${coords[1].toFixed(6)}</td>
@@ -76,15 +116,21 @@ async function loadStops() {
   const direction = document.getElementById("stop_filter_dir").value;
   const header = document.getElementById("stops-table-header");
   const tbody = document.getElementById("stops-table-body");
-  tbody.innerHTML = tableMessageRow(6, "Đang tải...");
+  tbody.innerHTML = tableMessageRow(7, "Đang tải...");
+  renderStopsPager(false);
 
   try {
     if (routeId === "ALL") {
-      // Hiển thị toàn bộ trạm trong hệ thống
+      // Hiển thị trạm trong hệ thống theo trang (có tìm kiếm)
       header.innerHTML = ALL_STOPS_TABLE_HEADER;
-      const data = await apiGetJson("/stops");
-      globalAllStops = data.features || [];
-      tbody.innerHTML = globalAllStops.map(stopFeatureRowHtml).join("");
+      const keyword = document.getElementById("stop_search").value.trim();
+      const data = await apiGetJson(`/stops?page=${stopsPage}&limit=${STOPS_PAGE_SIZE}&q=${encodeURIComponent(keyword)}`);
+      currentStopsPage = data.features || [];
+      stopsTotal = data.total || 0;
+      tbody.innerHTML = currentStopsPage.length
+        ? currentStopsPage.map(stopFeatureRowHtml).join("")
+        : tableMessageRow(7, "Không tìm thấy trạm phù hợp.", " color:#94a3b8;");
+      renderStopsPager(true);
     } else {
       // Hiển thị trạm thuộc tuyến & chiều được chọn
       header.innerHTML = ROUTE_STOPS_TABLE_HEADER;
@@ -97,7 +143,7 @@ async function loadStops() {
       tbody.innerHTML = stops.map(st => routeStopRowHtml(st, direction)).join("");
     }
   } catch (e) {
-    tbody.innerHTML = tableMessageRow(6, "Lỗi tải dữ liệu trạm.", " color:red;");
+    tbody.innerHTML = tableMessageRow(7, "Lỗi tải dữ liệu trạm.", " color:red;");
   }
 }
 
@@ -122,7 +168,7 @@ function openStopModal(editData = null) {
 }
 
 function editStop(id) {
-  const item = globalAllStops.find(f => f.properties.stop_id === id);
+  const item = currentStopsPage.find(f => f.properties.stop_id === id);
   if (item) openStopModal(item);
 }
 
@@ -154,11 +200,9 @@ async function openAssignStopModal() {
   const routeId = document.getElementById("stop_filter_route").value;
   const dir = document.getElementById("stop_filter_dir").value;
 
-  // Nạp danh sách trạm có sẵn
-  await ensureAllStopsLoaded();
-  document.getElementById("assign_stop_id").innerHTML = globalAllStops
-    .map(f => `<option value="${f.properties.stop_id}">${f.properties.stop_id} - ${f.properties.stop_name}</option>`)
-    .join("");
+  // Nạp danh sách trạm có sẵn (lọc qua ô tìm kiếm, tối đa STOPS_SEARCH_LIMIT kết quả)
+  document.getElementById("assign_stop_search").value = "";
+  await loadAssignStopOptions("");
 
   // Nạp danh sách tuyến
   const routeSelect = document.getElementById("assign_route_id");
@@ -168,6 +212,23 @@ async function openAssignStopModal() {
 
   openModal("modal-assign-stop");
 }
+
+async function loadAssignStopOptions(keyword) {
+  const select = document.getElementById("assign_stop_id");
+  try {
+    const data = await apiGetJson(`/stops?limit=${STOPS_SEARCH_LIMIT}&q=${encodeURIComponent(keyword)}`);
+    const features = data.features || [];
+    select.innerHTML = features.length
+      ? features.map(f => `<option value="${f.properties.stop_id}">${f.properties.stop_code || f.properties.stop_id} - ${f.properties.stop_name}</option>`).join("")
+      : `<option value="">Không tìm thấy trạm phù hợp</option>`;
+  } catch (e) {
+    select.innerHTML = `<option value="">Lỗi tải danh sách trạm</option>`;
+  }
+}
+
+const onAssignStopSearchInput = debounce(() => {
+  loadAssignStopOptions(document.getElementById("assign_stop_search").value.trim());
+}, 300);
 
 async function saveAssignStop(e) {
   e.preventDefault();

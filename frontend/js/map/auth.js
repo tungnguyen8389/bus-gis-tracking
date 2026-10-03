@@ -49,19 +49,16 @@ function setButtonBusy(btn, isBusy, busyHtml, idleHtml) {
 
 async function checkAuthOnStartup() {
   const token = getStoredToken();
-  if (!token) {
-    openAuthModal();
-    return;
-  }
 
   try {
+    // Không có token vẫn gọi /auth/me: backend chạy DISABLE_AUTH=true sẽ trả về user mặc định
     const res = await fetch(`${API_BASE}/auth/me`, {
-      headers: { "Authorization": `Bearer ${token}` }
+      headers: token ? { "Authorization": `Bearer ${token}` } : {}
     });
 
     if (res.ok) {
       currentUser = await res.json();
-      onLoginSuccess(token, currentUser, false);
+      onLoginSuccess(token || "", currentUser, false);
     } else {
       localStorage.removeItem(USER_TOKEN_KEY);
       openAuthModal();

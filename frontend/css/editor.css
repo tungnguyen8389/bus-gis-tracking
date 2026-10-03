@@ -1,0 +1,80 @@
+/* Trang chỉnh sửa lộ trình: panel trái + bản đồ toàn màn hình (dùng chung biến màu của admin.css) */
+:root {
+  --editor-panel-width: 340px;
+  --gap-color: #dc2626;
+  --far-color: #f97316;
+}
+
+#editor-panel {
+  width: var(--editor-panel-width);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  z-index: 5;
+}
+
+#editorViewDiv { flex: 1; height: 100vh; }
+
+.editor-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #1e293b;
+  color: #38bdf8;
+  font-weight: 700;
+}
+.editor-brand a { color: #cbd5e1; }
+.editor-brand a:hover { color: #fff; }
+
+.editor-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.editor-section .form-group { margin-bottom: 8px; }
+.editor-section-grow { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.editor-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.editor-row { display: flex; gap: 8px; align-items: center; }
+.editor-row .form-control { flex: 1; }
+.editor-muted { font-size: 12px; color: var(--text-muted); margin-top: 8px; min-height: 16px; }
+.editor-muted.dirty { color: var(--danger); font-weight: 600; }
+
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.legend-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; }
+.legend-swatch.gap { background: var(--gap-color); }
+.legend-swatch.far { background: var(--far-color); border-radius: 50%; }
+
+.editor-list { list-style: none; overflow-y: auto; font-size: 12px; }
+#gap-list { max-height: 160px; }
+.editor-section-grow .editor-list { flex: 1; }
+.editor-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.editor-list li:hover, .editor-list li.active { background: #e0f2fe; }
+.editor-list li.empty { cursor: default; color: var(--text-muted); }
+.editor-list li.empty:hover { background: none; }
+.editor-list .far { color: var(--far-color); font-weight: 600; }
+.editor-list .moved::after { content: " ●"; color: var(--danger); }
+.editor-list .stop-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor-list .stop-dist { flex-shrink: 0; }
+
+.editor-help { padding: 10px 16px; font-size: 12px; color: #334155; border-top: 1px solid var(--border); }
+.editor-help summary { cursor: pointer; font-weight: 600; }
+.editor-help ul { margin: 8px 0 0 16px; display: grid; gap: 4px; }
+kbd { background: #f1f5f9; border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; font-size: 11px; }
+
+.editor-auth-box { padding: 24px; display: grid; gap: 12px; width: 360px; }

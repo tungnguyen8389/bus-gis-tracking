@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "simulate": "node simulator.js"
+    "simulate": "node simulator.js",
+    "seed:busdata": "node scripts/seed_busdata.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

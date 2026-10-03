@@ -21,6 +21,13 @@ const io = new Server(server, {
 
 const JWT_SECRET = process.env.JWT_SECRET || "bus_gis_jwt_secret_token_2026_secure";
 
+// CHỈ DÙNG KHI TEST LOCAL: DISABLE_AUTH=true bỏ qua xác thực, mọi request chạy với quyền admin (user_id 1)
+const AUTH_DISABLED = process.env.DISABLE_AUTH === "true";
+const AUTH_DISABLED_USER = { user_id: 1, username: "admin", full_name: "Quản trị viên Hệ thống", role: "ADMIN" };
+if (AUTH_DISABLED) {
+  console.warn(">>> [CẢNH BÁO] DISABLE_AUTH=true — API KHÔNG yêu cầu đăng nhập. Không dùng cho môi trường thật!");
+}
+
 // --------------------------------------------------------------------
 // KẾT NỐI VÀ TỰ ĐỘNG KHỞI TẠO CSDL
 // --------------------------------------------------------------------
@@ -97,6 +104,11 @@ initDatabase();
 // AUTH MIDDLEWARE (JWT & ROLE PERMISSION)
 // --------------------------------------------------------------------
 function authenticateToken(req, res, next) {
+  if (AUTH_DISABLED) {
+    req.user = AUTH_DISABLED_USER;
+    return next();
+  }
+
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
 
@@ -298,8 +310,9 @@ app.get("/api/v1/routes", async (req, res) => {
       LEFT JOIN route_stops rs ON r.route_id = rs.route_id
       LEFT JOIN route_paths p ON r.route_id = p.route_id
       GROUP BY r.route_id
-      ORDER BY r.route_number ASC
     `);
+    // Sắp xếp tự nhiên theo số tuyến ("13" trước "100", "61-4" trước "61-37")
+    rows.sort((a, b) => a.route_number.localeCompare(b.route_number, "vi", { numeric: true }));
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: "Lỗi lấy danh sách tuyến xe" });
@@ -425,15 +438,58 @@ app.post("/api/v1/routes/:route_id/path", authenticateToken, async (req, res) =>
 // 5. BUS STOPS MANAGEMENT APIS (TRẠM DỪNG XE BUÝT)
 // --------------------------------------------------------------------
 
-// Lấy toàn bộ danh sách trạm dừng dạng GeoJSON FeatureCollection
+// Lấy danh sách trạm dừng dạng GeoJSON FeatureCollection
+// Tham số tùy chọn:
+//   bbox=minLon,minLat,maxLon,maxLat  — chỉ lấy trạm trong khung nhìn (dùng Spatial Index)
+//   q=<từ khóa>                        — tìm theo mã, mã trạm, tên, địa chỉ
+//   page, limit                        — phân trang (không truyền limit: trả về toàn bộ)
+const STOPS_MAX_LIMIT = 1000;
+
 app.get("/api/v1/stops", async (req, res) => {
+  const where = [];
+  const params = [];
+
+  if (req.query.bbox) {
+    const box = String(req.query.bbox).split(",").map(Number);
+    if (box.length !== 4 || box.some(v => !Number.isFinite(v))) {
+      return res.status(400).json({ error: "Tham số bbox không hợp lệ (minLon,minLat,maxLon,maxLat)" });
+    }
+    const [minLon, minLat, maxLon, maxLat] = box;
+    // Polygon truy vấn không gắn SRID: MariaDB 10.4 báo lỗi 1207 khi dùng spatial index với hình có SRID 4326
+    where.push("MBRContains(ST_GeomFromText(?), geom)");
+    params.push(`POLYGON((${minLon} ${minLat}, ${maxLon} ${minLat}, ${maxLon} ${maxLat}, ${minLon} ${maxLat}, ${minLon} ${minLat}))`);
+  }
+
+  const keyword = String(req.query.q || "").trim();
+  if (keyword) {
+    where.push("(stop_id LIKE ? OR stop_code LIKE ? OR stop_name LIKE ? OR address LIKE ?)");
+    const like = `%${keyword}%`;
+    params.push(like, like, like, like);
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const limit = req.query.limit ? Math.min(Math.max(parseInt(req.query.limit, 10) || 1, 1), STOPS_MAX_LIMIT) : null;
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+
   try {
-    const [rows] = await dbPool.query(
-      `SELECT stop_id, stop_name, address, ST_AsGeoJSON(geom) AS geom_json FROM bus_stops`
-    );
+    const [[{ total }]] = await dbPool.query(`SELECT COUNT(*) AS total FROM bus_stops ${whereSql}`, params);
+
+    // Sắp xếp tự nhiên theo mã số trạm ("35" trước "100")
+    let sql = `SELECT stop_id, stop_code, stop_name, address, stop_type, status, ST_AsGeoJSON(geom) AS geom_json
+               FROM bus_stops ${whereSql}
+               ORDER BY LENGTH(stop_id), stop_id`;
+    const queryParams = [...params];
+    if (limit) {
+      sql += " LIMIT ? OFFSET ?";
+      queryParams.push(limit, (page - 1) * limit);
+    }
+    const [rows] = await dbPool.query(sql, queryParams);
 
     const geojson = {
       type: "FeatureCollection",
+      total,
+      page: limit ? page : 1,
+      limit: limit || total,
       features: rows.map(row => {
         const geom = JSON.parse(row.geom_json);
         return {
@@ -441,8 +497,11 @@ app.get("/api/v1/stops", async (req, res) => {
           geometry: geom,
           properties: {
             stop_id: row.stop_id,
+            stop_code: row.stop_code,
             stop_name: row.stop_name,
             address: row.address,
+            stop_type: row.stop_type,
+            status: row.status,
             longitude: geom.coordinates[0],
             latitude: geom.coordinates[1]
           }
@@ -519,7 +578,7 @@ app.get("/api/v1/routes/:route_id/stops", async (req, res) => {
   try {
     const [rows] = await dbPool.query(`
       SELECT rs.route_id, rs.stop_id, rs.direction, rs.stop_order,
-             s.stop_name, s.address, ST_AsGeoJSON(s.geom) AS geom_json
+             s.stop_code, s.stop_name, s.address, s.stop_type, s.status, ST_AsGeoJSON(s.geom) AS geom_json
       FROM route_stops rs
       JOIN bus_stops s ON rs.stop_id = s.stop_id
       WHERE rs.route_id = ? AND rs.direction = ?

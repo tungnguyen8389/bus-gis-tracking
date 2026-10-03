@@ -94,7 +94,8 @@ async function loadSingleRouteData(routeId, direction) {
       routeLayer.add(routePolyline);
 
       if (mapView && coords.length > 0) {
-        mapView.goTo(coords, { duration: 800 });
+        // Chờ MapView sẵn sàng (auto-login có thể nạp tuyến trước khi view khởi tạo xong)
+        mapView.when(() => mapView.goTo(coords, { duration: 800 })).catch(() => {});
       }
     }
   } catch (e) {}
@@ -109,37 +110,90 @@ async function loadSingleRouteData(routeId, direction) {
   } catch (e) {}
 }
 
+// Chuyển Feature GeoJSON của /stops thành bản ghi trạm dùng cho danh sách & marker
+function featureToStop(f, idx) {
+  return {
+    ...f.properties,
+    stop_order: idx + 1,
+    longitude: f.geometry.coordinates[0],
+    latitude: f.geometry.coordinates[1]
+  };
+}
+
+// Chế độ "Tất cả các tuyến": chỉ tải trạm trong khung nhìn khi đã phóng đủ gần
 async function loadAllRoutesAndStops() {
   if (!clearRouteAndStopLayers()) return;
 
+  if (!mapView || mapView.zoom < MAP_STOPS_MIN_ZOOM) {
+    currentRawStops = [];
+    renderStopsList([], "🔍 Phóng to bản đồ hoặc gõ tên trạm để xem trạm dừng");
+    return;
+  }
+
+  const bbox = getViewBboxWgs84();
+  if (!bbox) return;
   try {
-    const res = await fetch(`${API_BASE}/stops`);
+    const res = await fetch(`${API_BASE}/stops?bbox=${bbox.join(",")}&limit=${MAP_STOPS_VIEW_LIMIT}`);
     const data = await res.json();
-    const features = data.features || [];
-    currentRawStops = features.map((f, i) => ({
-      stop_id: f.properties.stop_id,
-      stop_name: f.properties.stop_name,
-      address: f.properties.address,
-      stop_order: i + 1,
-      longitude: f.geometry.coordinates[0],
-      latitude: f.geometry.coordinates[1]
-    }));
+    if (currentSelectedRoute !== "ALL") return; // người dùng đã đổi tuyến trong lúc chờ
+    currentRawStops = (data.features || []).map(featureToStop);
     renderStopsList(currentRawStops);
   } catch (e) {}
+}
+
+// Bản đồ dừng kéo / zoom: nạp lại trạm theo khung nhìn mới (chỉ ở chế độ "Tất cả")
+let skipViewReloadUntil = 0;
+function onMapStationary() {
+  if (Date.now() < skipViewReloadUntil) return;
+  const keyword = document.getElementById("stopSearchInput").value.trim();
+  if (currentSelectedRoute === "ALL" && !keyword) {
+    loadAllRoutesAndStops();
+  }
 }
 
 // --------------------------------------------------------------------
 // TÌM KIẾM TRẠM DỪNG & RENDER DANH SÁCH
 // --------------------------------------------------------------------
+const searchStopsOnServer = debounce(async keyword => {
+  try {
+    const res = await fetch(`${API_BASE}/stops?q=${encodeURIComponent(keyword)}&limit=${STOPS_SEARCH_LIMIT}`);
+    const data = await res.json();
+    if (document.getElementById("stopSearchInput").value.trim() !== keyword) return; // đã gõ tiếp
+    renderStopsList((data.features || []).map(featureToStop));
+  } catch (e) {}
+}, 300);
+
 function filterStops() {
-  const keyword = document.getElementById("stopSearchInput").value.toLowerCase().trim();
+  const keyword = document.getElementById("stopSearchInput").value.trim();
+
+  // Chế độ "Tất cả": tìm trên toàn hệ thống qua server
+  if (currentSelectedRoute === "ALL") {
+    if (keyword) searchStopsOnServer(keyword);
+    else loadAllRoutesAndStops();
+    return;
+  }
+
   if (!keyword) {
     renderStopsList(currentRawStops);
     return;
   }
-  const matches = value => value && value.toLowerCase().includes(keyword);
-  const filtered = currentRawStops.filter(s => matches(s.stop_name) || matches(s.address) || matches(s.stop_id));
+  const lower = keyword.toLowerCase();
+  const matches = value => value && value.toLowerCase().includes(lower);
+  const filtered = currentRawStops.filter(s => matches(s.stop_name) || matches(s.address) || matches(s.stop_id) || matches(s.stop_code));
   renderStopsList(filtered);
+}
+
+function isStopActive(st) {
+  return !st.status || st.status === STOP_STATUS_ACTIVE;
+}
+
+function stopPopupHtml(st) {
+  const statusColor = isStopActive(st) ? "#15803d" : "#b91c1c";
+  return `<b>Mã trạm:</b> ${st.stop_code || st.stop_id} <span style="color:#94a3b8;">(ID ${st.stop_id})</span><br>` +
+    `<b>Loại trạm:</b> ${st.stop_type || "---"}<br>` +
+    `<b>Trạng thái:</b> <span style="color:${statusColor}; font-weight:600;">${st.status || STOP_STATUS_ACTIVE}</span><br>` +
+    `<b>Địa chỉ:</b> ${st.address || "---"}<br>` +
+    `<b>Tọa độ:</b> [${st.longitude}, ${st.latitude}]`;
 }
 
 function createStopGraphic(st, order) {
@@ -147,14 +201,15 @@ function createStopGraphic(st, order) {
     geometry: { type: "point", longitude: st.longitude, latitude: st.latitude },
     symbol: {
       type: "simple-marker",
-      color: [0, 150, 136],
+      // Trạm không còn khai thác hiển thị màu xám
+      color: isStopActive(st) ? [0, 150, 136] : [148, 163, 184],
       size: "11px",
       outline: { color: [255, 255, 255], width: 1.5 }
     },
     attributes: st,
     popupTemplate: {
-      title: `Trạm #${order}: {stop_name}`,
-      content: `<b>Mã trạm:</b> {stop_id}<br><b>Địa chỉ:</b> {address}<br><b>Tọa độ:</b> [{longitude}, {latitude}]`
+      title: `Trạm #${order}: ${st.stop_name}`,
+      content: stopPopupHtml(st)
     }
   });
 }
@@ -176,22 +231,24 @@ function createStopListItem(st, order) {
 
 function focusStop(st, order) {
   if (!mapView) return;
+  // Ở chế độ "Tất cả", giữ nguyên danh sách hiện tại khi bản đồ bay tới trạm
+  if (currentSelectedRoute === "ALL") skipViewReloadUntil = Date.now() + 1500;
   mapView.goTo({ center: [st.longitude, st.latitude], zoom: 17 }, { duration: 600 });
   mapView.openPopup({
     title: `Trạm #${order}: ${st.stop_name}`,
-    content: `<b>Mã trạm:</b> ${st.stop_id}<br><b>Địa chỉ:</b> ${st.address || "---"}`,
+    content: stopPopupHtml(st),
     location: { type: "point", longitude: st.longitude, latitude: st.latitude }
   });
 }
 
-function renderStopsList(stops) {
+function renderStopsList(stops, emptyMessage = "Không tìm thấy trạm phù hợp") {
   document.getElementById("stopsCount").innerText = `${stops.length} trạm`;
   const timeline = document.getElementById("stopsTimeline");
   timeline.innerHTML = "";
   if (stopsLayer) stopsLayer.removeAll();
 
   if (stops.length === 0) {
-    timeline.innerHTML = `<li style="padding: 10px; color: #94a3b8; text-align: center;">Không tìm thấy trạm phù hợp</li>`;
+    timeline.innerHTML = `<li style="padding: 10px; color: #94a3b8; text-align: center;">${emptyMessage}</li>`;
     return;
   }
 

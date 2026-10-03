@@ -39,7 +39,6 @@ async function saveResource(collectionPath, id, isEdit, payload, errorFallback) 
 // BỘ NHỚ ĐỆM DỮ LIỆU DÙNG CHUNG GIỮA CÁC TAB
 // --------------------------------------------------------------------
 let globalRoutes = [];
-let globalAllStops = [];
 let currentVehiclesList = [];
 
 async function ensureRoutesLoaded() {
@@ -54,14 +53,6 @@ async function ensureVehiclesLoaded() {
     currentVehiclesList = await apiGetJson("/vehicles");
   }
   return currentVehiclesList;
-}
-
-async function ensureAllStopsLoaded() {
-  if (globalAllStops.length === 0) {
-    const data = await apiGetJson("/stops");
-    globalAllStops = data.features || [];
-  }
-  return globalAllStops;
 }
 
 // Đổ danh sách tuyến vào <select>; firstOptionHtml là option "Tất cả" (nếu có)

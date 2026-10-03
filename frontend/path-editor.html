@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chỉnh Sửa Lộ Trình Tuyến Xe Buýt</title>
+
+  <!-- ArcGIS Maps SDK v4.29 -->
+  <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/4.29/"></script>
+
+  <!-- Font & Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <link rel="stylesheet" href="css/admin.css" />
+  <link rel="stylesheet" href="css/editor.css" />
+</head>
+<body>
+
+  <!-- PANEL ĐIỀU KHIỂN -->
+  <aside id="editor-panel">
+    <div class="editor-brand">
+      <a href="admin.html" title="Về trang quản trị"><i class="fa-solid fa-arrow-left"></i></a>
+      <span><i class="fa-solid fa-draw-polygon"></i> Sửa Lộ Trình</span>
+    </div>
+
+    <div class="editor-section">
+      <div class="form-group">
+        <label for="select-route">Tuyến</label>
+        <select id="select-route" class="form-control"></select>
+      </div>
+      <div class="editor-row">
+        <select id="select-direction" class="form-control">
+          <option value="1">Chiều đi</option>
+          <option value="2">Chiều về</option>
+        </select>
+        <button class="btn btn-primary" onclick="handleLoadClick()"><i class="fa-solid fa-download"></i> Tải</button>
+      </div>
+      <div id="route-info" class="editor-muted"></div>
+    </div>
+
+    <div class="editor-section">
+      <div class="editor-row">
+        <button id="btn-undo" class="btn btn-outline btn-sm" onclick="undoEdit()" title="Hoàn tác (Ctrl+Z)"><i class="fa-solid fa-rotate-left"></i> Hoàn tác</button>
+        <button id="btn-redo" class="btn btn-outline btn-sm" onclick="redoEdit()" title="Làm lại (Ctrl+Y)"><i class="fa-solid fa-rotate-right"></i> Làm lại</button>
+        <button id="btn-save" class="btn btn-success btn-sm" onclick="saveEdits()"><i class="fa-solid fa-floppy-disk"></i> Lưu</button>
+      </div>
+      <div id="dirty-status" class="editor-muted"></div>
+    </div>
+
+    <div class="editor-section">
+      <div class="editor-section-title">
+        <span><span class="legend-swatch gap"></span> Đoạn nhảy &gt; <span id="gap-threshold"></span>m</span>
+        <button class="btn btn-outline btn-sm" onclick="focusNextGap()">Đoạn kế ›</button>
+      </div>
+      <ul id="gap-list" class="editor-list"></ul>
+    </div>
+
+    <div class="editor-section editor-section-grow">
+      <div class="editor-section-title">
+        <span><span class="legend-swatch far"></span> Trạm (cam: cách path &gt; <span id="stop-threshold"></span>m)</span>
+      </div>
+      <ul id="stop-list" class="editor-list"></ul>
+    </div>
+
+    <details class="editor-help">
+      <summary>Hướng dẫn</summary>
+      <ul>
+        <li>Click vào lộ trình để sửa: kéo đỉnh để dời, kéo điểm giữa đoạn để chèn đỉnh mới, chọn đỉnh rồi nhấn <kbd>Delete</kbd> để xoá.</li>
+        <li>Click vào trạm để kéo sang vị trí mới. Trạm dùng chung cho mọi tuyến đi qua nó.</li>
+        <li>Click ra vùng trống để kết thúc thao tác. <kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> hoàn tác / làm lại.</li>
+        <li>Nút góc dưới trái bản đồ chuyển sang ảnh vệ tinh để so đường.</li>
+      </ul>
+    </details>
+  </aside>
+
+  <!-- BẢN ĐỒ -->
+  <main id="editorViewDiv"></main>
+
+  <!-- CẦN ĐĂNG NHẬP -->
+  <div id="editor-auth-overlay" class="modal-overlay">
+    <div class="modal-box editor-auth-box">
+      <h3>Cần đăng nhập quản trị</h3>
+      <p>Đăng nhập ở trang quản trị rồi mở lại công cụ này.</p>
+      <a class="btn btn-primary" href="admin.html">Đến trang quản trị</a>
+    </div>
+  </div>
+
+  <script src="js/common/config.js"></script>
+  <script src="js/common/api.js"></script>
+  <script src="js/admin/api.js"></script>
+  <script src="js/editor/map.js"></script>
+  <script src="js/editor/analysis.js"></script>
+  <script src="js/editor/main.js"></script>
+</body>
+</html>

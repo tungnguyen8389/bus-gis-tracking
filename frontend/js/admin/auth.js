@@ -8,12 +8,7 @@ function setAuthScreenVisible(isVisible) {
 }
 
 async function checkAuth() {
-  const token = localStorage.getItem(ADMIN_TOKEN_KEY);
-  if (!token) {
-    setAuthScreenVisible(true);
-    return;
-  }
-
+  // Không có token vẫn gọi /auth/me: backend chạy DISABLE_AUTH=true sẽ trả về user mặc định
   try {
     const res = await fetch(`${API_BASE}/auth/me`, { headers: getAuthHeaders() });
     if (res.ok) {

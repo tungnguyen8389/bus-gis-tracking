@@ -16,6 +16,7 @@ function routeRowHtml(r) {
       <td>${pathBadge}</td>
       <td>
         <button class="btn btn-sm btn-primary" onclick="editRoute('${r.route_id}')"><i class="fa-solid fa-pen"></i></button>
+        <a class="btn btn-sm btn-success" href="path-editor.html?route_id=${encodeURIComponent(r.route_id)}&direction=1" target="_blank" title="Sửa lộ trình trên bản đồ"><i class="fa-solid fa-draw-polygon"></i></a>
         <button class="btn btn-sm btn-danger" onclick="deleteRoute('${r.route_id}')"><i class="fa-solid fa-trash"></i></button>
       </td>
     </tr>

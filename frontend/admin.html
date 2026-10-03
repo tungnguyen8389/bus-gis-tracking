@@ -238,6 +238,10 @@
                 </select>
               </div>
 
+              <div id="stop_search_group" style="display: flex; align-items: center; gap: 8px;">
+                <input type="text" id="stop_search" class="form-control" style="width: 260px;" placeholder="🔍 Tìm mã / tên / địa chỉ trạm..." oninput="onStopSearchInput()" />
+              </div>
+
               <div id="stop_filter_dir_group" style="display: none; align-items: center; gap: 8px;">
                 <label style="font-weight: 700; font-size: 13px; color: #334155;"><i class="fa-solid fa-arrows-left-right"></i> Chiều di chuyển:</label>
                 <select id="stop_filter_dir" class="form-control" style="width: 170px;" onchange="loadStops()">
@@ -270,6 +274,15 @@
                 </thead>
                 <tbody id="stops-table-body"></tbody>
               </table>
+            </div>
+
+            <!-- PHÂN TRANG (chỉ ở chế độ Tất cả các trạm) -->
+            <div id="stops-pager" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 13px; color: #475569;">
+              <span id="stops-pager-info"></span>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-outline" id="stops-pager-prev" onclick="changeStopsPage(-1)"><i class="fa-solid fa-chevron-left"></i> Trước</button>
+                <button class="btn btn-sm btn-outline" id="stops-pager-next" onclick="changeStopsPage(1)">Sau <i class="fa-solid fa-chevron-right"></i></button>
+              </div>
             </div>
           </div>
         </div>
@@ -586,6 +599,7 @@
         <form id="form-assign-stop" onsubmit="saveAssignStop(event)">
           <div class="form-group">
             <label>Chọn Trạm Dừng có sẵn:</label>
+            <input type="text" id="assign_stop_search" class="form-control" style="margin-bottom: 6px;" placeholder="🔍 Gõ mã / tên trạm để lọc..." oninput="onAssignStopSearchInput()" />
             <select id="assign_stop_id" class="form-control" required></select>
           </div>
           <div class="form-group">
