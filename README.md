@@ -19,7 +19,15 @@ Bus_project/
 │   └── NODEJS_VS_LARAVEL_ANALYSIS.md # Phân tích so sánh công nghệ Backend (Node.js vs Laravel)
 ├── frontend/
 │   ├── index.html                  # Giao diện bản đồ giám sát 2D Realtime (ArcGIS JS SDK v4.29)
-│   └── admin.html                  # Trang Quản trị Admin Portal (Auth, CRUD & JSON Importer)
+│   ├── admin.html                  # Trang Quản trị Admin Portal (Auth, CRUD & JSON Importer)
+│   ├── css/
+│   │   ├── map.css                 # Style trang bản đồ
+│   │   └── admin.css               # Style trang quản trị
+│   └── js/                         # Classic scripts (không build), nạp theo thứ tự trong HTML
+│       ├── common/                 # config.js (API_BASE, token keys, map center), api.js
+│       ├── map/                    # toast, auth, map, routes, realtime, main
+│       └── admin/                  # api (cache), ui (modal/tab), auth, dashboard, routes, stops,
+│                                   # vehicles, schedules, users, import, main
 ├── tools/
 │   ├── get_coords_1.html           # Công cụ trích xuất dữ liệu lộ trình & trạm nâng cao
 │   └── google_maps_importer.html   # Công cụ import & đảo tọa độ Google Maps
