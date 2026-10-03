@@ -815,6 +815,16 @@
         center: [106.80196, 10.87052], // Khu vực ĐHQG TP.HCM
         zoom: 14
       });
+      // Sidebar (330px + lề 15px) và panel Theo dõi xe (310px góc dưới phải) nổi đè lên bản đồ
+      // → chừa chỗ để goTo không đặt lộ trình dưới các panel (màn hẹp thì bỏ padding phải để còn chỗ cho bản đồ)
+      const applyMapPadding = () => {
+        const w = window.innerWidth;
+        mapView.padding = w >= 768
+          ? { left: 360, top: 60, right: w >= 1200 ? 340 : 20, bottom: 20 }
+          : { top: 0, left: 0, right: 0, bottom: 0 };
+      };
+      applyMapPadding();
+      window.addEventListener("resize", applyMapPadding);
 
       // Nút chuyển đổi nhanh ảnh Vệ tinh
       const basemapToggle = new BasemapToggle({ view: mapView, nextBasemap: "satellite" });
@@ -1296,12 +1306,70 @@
       });
     }
 
-    // Vẽ lộ trình tuyến đã chọn + đánh dấu trạm lên / xuống, chỉ hiện xe của tuyến đó
+    // Chiếu điểm p lên đoạn a-b (xấp xỉ phẳng, đủ chính xác trong phạm vi một tuyến nội thành)
+    function projectOnSegment(p, a, b) {
+      const kx = Math.cos(p[1] * Math.PI / 180);
+      const dx = (b[0] - a[0]) * kx, dy = b[1] - a[1];
+      const len2 = dx * dx + dy * dy;
+      let t = len2 ? (((p[0] - a[0]) * kx) * dx + (p[1] - a[1]) * dy) / len2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const q = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+      const ex = (p[0] - q[0]) * kx, ey = p[1] - q[1];
+      return { point: q, t, dist2: ex * ex + ey * ey };
+    }
+
+    // Vị trí gần p nhất trên lộ trình, chỉ xét từ đoạn fromSeg trở đi (tuyến vòng ghé lại cùng khu vực)
+    function locateOnPath(coords, p, fromSeg = 0, fromT = 0) {
+      let best = null;
+      for (let i = fromSeg; i < coords.length - 1; i++) {
+        const pr = projectOnSegment(p, coords[i], coords[i + 1]);
+        if (i === fromSeg && pr.t < fromT) continue;
+        if (!best || pr.dist2 < best.dist2) best = { seg: i, t: pr.t, point: pr.point, dist2: pr.dist2 };
+      }
+      return best;
+    }
+
+    // Cắt lộ trình từ trạm lên tới trạm xuống; không có trạm lên → cắt từ đầu tuyến
+    function clipPathBetween(coords, fromLngLat, toLngLat) {
+      if (coords.length < 2) return coords;
+      const start = fromLngLat ? locateOnPath(coords, fromLngLat) : { seg: 0, t: 0, point: coords[0] };
+      const end = locateOnPath(coords, toLngLat, start.seg, start.t) || locateOnPath(coords, toLngLat);
+      if (!end || end.seg < start.seg || (end.seg === start.seg && end.t < start.t)) return coords;
+      return [start.point, ...coords.slice(start.seg + 1, end.seg + 1), end.point];
+    }
+
+    // Chỉ vẽ đoạn lộ trình khách thực sự đi (trạm lên → trạm xuống) + 2 trạm đó, chỉ hiện xe của tuyến
     async function showTripOnMap(result, dest, position) {
       currentSelectedRoute = result.route_id;
       currentDirection = Number(result.direction);
+      currentRawStops = [];
       applyFleetFilter();
-      await loadSingleRouteData(result.route_id, currentDirection);
+      if (routeLayer) routeLayer.removeAll();
+      if (stopsLayer) stopsLayer.removeAll();
+
+      const board = result.board_stop ? [result.board_stop.longitude, result.board_stop.latitude] : null;
+      const alight = [result.alight_stop.longitude, result.alight_stop.latitude];
+      const focus = [alight];
+      if (board) focus.push(board);
+      try {
+        const pathRes = await fetch(`${API_BASE}/routes/${result.route_id}/path?direction=${currentDirection}`);
+        if (pathRes.ok) {
+          const geom = (await pathRes.json()).geometry;
+          const coords = geom.type === "MultiLineString" ? geom.coordinates.flat() : geom.coordinates;
+          const segment = clipPathBetween(coords, board, alight);
+          // Người dùng có thể đã chọn tuyến khác trong lúc chờ tải
+          if (currentSelectedRoute !== result.route_id) return;
+          if (segment.length > 1 && routeLayer) {
+            routeLayer.add(new GraphicClass({
+              geometry: { type: "polyline", paths: [segment] },
+              symbol: { type: "simple-line", color: [0, 122, 255, 0.9], width: 5 }
+            }));
+            focus.push(...segment);
+          }
+        }
+      } catch (e) {}
+      if (position) focus.push([position.longitude, position.latitude]);
+      goToSequential(focus, { duration: 800 });
 
       if (tripLayer) tripLayer.removeAll();
       addTripMarker(dest.longitude, dest.latitude, [220, 38, 38], `Điểm đến: ${dest.stop_name}`, escapeHtml(dest.address || ""));
