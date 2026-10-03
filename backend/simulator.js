@@ -189,8 +189,8 @@ async function loadDataFromDatabase() {
 
       if (assignedSchedules.length > 0) {
         assignedSchedules.forEach((sch, idx) => {
-          // Định danh duy nhất cho từng phiên xe theo tuyến để tránh trùng lặp
-          const uniqueVehId = `${sch.vehicle_id}_${rInfo.route_id}_D${rInfo.direction}`;
+          // Định danh duy nhất cho từng phiên xe theo tuyến và mã lịch trình để tránh trùng lặp phát sóng
+          const uniqueVehId = `${sch.vehicle_id}_${rInfo.route_id}_D${rInfo.direction}_S${sch.schedule_id || (idx + 1)}`;
           usedVehIds.add(sch.vehicle_id);
 
           const oldDist = existingDistances[uniqueVehId];
@@ -204,7 +204,7 @@ async function loadDataFromDatabase() {
             direction: rInfo.direction,
             route_key: key,
             currentDistance: distOffset % totalDist,
-            speedKmh: 32 + (idx * 2)
+            speedKmh: 30 + (idx * 2)
           });
         });
       } else {
@@ -243,9 +243,9 @@ async function loadDataFromDatabase() {
 }
 
 // --------------------------------------------------------------------
-// TIẾN TRÌNH PHÁT TỌA ĐỘ GPS NỘI SUY MƯỢT MỖI 1 GIÂY
+// TIẾN TRÌNH PHÁT TỌA ĐỘ GPS NỘI SUY MƯỢT MỖI 500MS (2 LẦN/GIÂY)
 // --------------------------------------------------------------------
-const TICK_INTERVAL_MS = 1000; // Phát mỗi 1 giây (1000ms) để di chuyển cực kỳ mượt mà
+const TICK_INTERVAL_MS = 500; // Phát mỗi 500ms để di chuyển cực kỳ mượt mà liên tục
 
 async function startSimulator() {
   await loadDataFromDatabase();
