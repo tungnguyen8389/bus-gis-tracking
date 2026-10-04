@@ -18,29 +18,32 @@ Bus_project/
 │   ├── src/
 │   │   ├── app.js                  # Express app: middleware chung + mount router các module dưới /api/v1
 │   │   ├── config/                 # env.js (biến môi trường), db.js (MySQL pool + initDatabase)
-│   │   ├── middleware/auth.js      # authenticateToken (JWT), requireAdmin
+│   │   ├── middleware/auth.js      # authenticateToken (JWT), requireAdmin, requireRole, requireStaff
 │   │   ├── modules/                # Mỗi feature: <tên>.routes.js + <tên>.controller.js (+ .service.js)
-│   │   │   ├── auth/  users/  bus-routes/  paths/  stops/  trip-plan/
+│   │   │   ├── auth/  driver/  users/  bus-routes/  paths/  stops/  trip-plan/
 │   │   │   └── vehicles/  schedules/  admin-stats/  import-export/
-│   │   └── sockets/tracking.socket.js # Hub realtime: gps_ping → fleet_location_update + ghi log
-│   ├── simulator.js                # Bộ phát GPS giả lập lộ trình xe buýt (đang tạm tắt)
-│   └── scripts/                    # db:import / db:export busdata.sql
+│   │   └── sockets/                # index.js, viewer.socket.js ("/" chỉ nhận), device.socket.js + device.auth.js ("/device" tài xế), gps.validate.js, tracking-log.js
+│   └── scripts/                    # db:import / db:export busdata.sql, db:seed-drivers (tài xế demo)
 ├── docs/
 │   └── NODEJS_VS_LARAVEL_ANALYSIS.md # Phân tích so sánh công nghệ Backend (Node.js vs Laravel)
 ├── frontend/
 │   ├── index.html                  # Shell bản đồ giám sát 2D Realtime (ArcGIS JS SDK v4.29)
 │   ├── admin.html                  # Shell trang Quản trị Admin Portal (Auth, CRUD & JSON Importer)
-│   ├── assets/css/                 # map.css, admin.css
+│   ├── driver.html                 # Trang tài xế (mobile): đăng nhập, chọn chuyến, bản đồ, phát GPS điện thoại
+│   ├── assets/css/                 # map.css, admin.css, driver.css
 │   └── src/                        # ES modules, không cần build (phải mở qua HTTP, không chạy file://)
 │       ├── core/                   # config (API_BASE), http (request + ApiError), session (token), actions (data-action), dom, toast, modal, arcgis
 │       ├── modules/<tên>/<tên>.service.js # Gọi API & xử lý response theo module backend:
 │       │                           #   auth, users, bus-routes, paths, stops, trip-plan, vehicles, schedules,
-│       │                           #   admin-stats, import-export, realtime (Socket.io)
+│       │                           #   admin-stats, import-export, driver, realtime (Socket.io viewer "/" + device "/device")
 │       └── views/
 │           ├── map/                # map.view.js (entry), map.state.js, sections/*.html,
 │           │                       #   features/: base-map, staff-auth, route-browser, fleet-tracking, geolocation, trip-finder/
-│           └── admin/              # admin.view.js (entry), admin.state.js, sections/{tabs,modals}/*.html,
-│                                   #   features/: auth, navigation, dashboard, routes, stops, vehicles, schedules, json-hub, users
+│           ├── admin/              # admin.view.js (entry), admin.state.js, sections/{tabs,modals}/*.html,
+│           │                       #   features/: auth, navigation, dashboard, routes, stops, vehicles, schedules, json-hub, users
+│           └── driver/             # driver.view.js (entry), driver.state.js, sections/{login,trip-select,drive-panel}.html,
+│                                   #   features/: screens, driver-auth, trip-select, drive-map, phone-gps, next-stop
+├── simulator/                      # (Tùy chọn, công cụ demo) Tài xế ảo phát GPS — độc lập, xóa khi triển khai thật
 ├── tools/
 │   ├── get_coords_1.html           # Công cụ trích xuất dữ liệu lộ trình & trạm nâng cao
 │   └── google_maps_importer.html   # Công cụ import & đảo tọa độ Google Maps
@@ -56,6 +59,7 @@ Bus_project/
 
 * **Quản trị viên (ADMIN):** `admin` / `admin123`
 * **Người điều hành (MANAGER):** `manager` / `manager123`
+* **Tài xế (DRIVER):** `driver01` … `driver20` / `driver123` (sau khi chạy `npm run db:seed-drivers`)
 
 ---
 
@@ -79,12 +83,31 @@ npm start
 ```
 > Server sẽ lắng nghe tại: `http://localhost:3000` — phục vụ cả API lẫn giao diện tĩnh (`frontend/`, `tools/`), không cần Apache/XAMPP.
 
-### 3. Bộ giả lập GPS xe buýt (đang tạm tắt)
-`npm run simulate` hiện chỉ in thông báo và thoát: simulator chưa được tối ưu cho 332 lộ trình TP.HCM (tự sinh 2–3 xe mỗi lộ trình, phát 500ms/lần). Nếu vẫn cần chạy thử: `node simulator.js`.
+### 3. Tài khoản tài xế & nguồn GPS
+
+GPS chỉ được phát bởi **tài xế đã đăng nhập** (namespace Socket.io `/device`, JWT role `DRIVER`). Bản đồ chỉ nhận dữ liệu.
+
+```bash
+cd backend && npm run db:seed-drivers -- --count 20   # driver01..driver20 / mật khẩu driver123, xe DRV_01..DRV_20
+```
+
+`db:import` không đụng `users`/`vehicles`. Nếu import làm thay đổi danh sách tuyến, chạy lại seed để tài xế có lịch trình.
+
+**Trang tài xế:** `http://localhost:3000/frontend/driver.html`. Đăng nhập → chọn chuyến → **Bắt đầu chuyến** để phát GPS điện thoại.
+Trình duyệt chỉ cho đọc GPS trên HTTPS hoặc `localhost`:
+- Test trên laptop: mở bằng `localhost`, giả lập vị trí bằng DevTools → Sensors.
+- Test trên điện thoại thật: mở tunnel HTTPS (`cloudflared tunnel --url http://localhost:3000` hoặc `ngrok http 3000`).
+
+**Simulator (tùy chọn):** tài xế ảo đăng nhập và phát GPS giống điện thoại. Xem [simulator/README.md](simulator/README.md).
+
+```bash
+cd simulator && npm install && npm start -- --count 10
+```
 
 ### 4. Truy cập Hệ thống
 * **Giao diện Bản đồ Giám sát Real-time:** `http://localhost:3000/` (chuyển tới `/frontend/index.html`)
 * **Trang Quản trị Hệ thống (Admin Portal):** `http://localhost:3000/frontend/admin.html`
+* **Trang Tài xế:** `http://localhost:3000/frontend/driver.html`
 * **Công cụ lấy tọa độ:** `http://localhost:3000/tools/get_coords_1.html`
 * **Công cụ chuyển tọa độ Google Maps:** `http://localhost:3000/tools/google_maps_importer.html`
 
