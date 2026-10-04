@@ -91,6 +91,8 @@ GPS chỉ được phát bởi **tài xế đã đăng nhập** (namespace Socke
 cd backend && npm run db:seed-drivers -- --count 20   # driver01..driver20 / mật khẩu driver123, xe DRV_01..DRV_20
 ```
 
+Backend tự bổ sung vai trò `DRIVER` và cột `vehicles.driver_user_id` khi khởi động (idempotent), nên DB production không cần chạy seed demo chỉ để migrate.
+
 `db:import` không đụng `users`/`vehicles`. Nếu import làm thay đổi danh sách tuyến, chạy lại seed để tài xế có lịch trình.
 
 **Trang tài xế:** `http://localhost:3000/frontend/driver.html`. Đăng nhập → chọn chuyến → **Bắt đầu chuyến** để phát GPS điện thoại.
