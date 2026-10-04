@@ -5,7 +5,6 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "simulate": "echo 'Simulator đang tạm tắt (chưa tối ưu cho 332 lộ trình TP.HCM). Bật lại: node simulator.js' && exit 1",
     "db:import": "node scripts/import_busdata_sql.js",
     "db:export": "node scripts/export_busdata_sql.js",
     "db:seed-drivers": "node scripts/seed_drivers.js",
