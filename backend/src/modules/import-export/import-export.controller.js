@@ -5,6 +5,22 @@ const { dbPool } = require("../../config/db");
 // Hỗ trợ 100% định dạng từ công cụ trích xuất get_coords_1.html
 // --------------------------------------------------------------------
 
+// Sinh stop_id cho trạm vẽ mới: ST_ + thời gian base36 + thứ tự (≤ 20 ký tự theo cột stop_id,
+// không trùng giữa các lần import nên không đè trạm cũ khi đổi thứ tự)
+function newStopId(order) {
+  return `ST_${Date.now().toString(36)}_${Number(order).toString(36)}`.toUpperCase();
+}
+
+// Thêm / cập nhật trạm; chỉ ghi đè address khi gói có gửi, giữ nguyên stop_code, stop_type, status
+async function upsertStop(conn, stopId, stopName, address, lon, lat) {
+  await conn.query(
+    `INSERT INTO bus_stops (stop_id, stop_name, address, geom)
+     VALUES (?, ?, ?, ST_GeomFromText(?, 4326))
+     ON DUPLICATE KEY UPDATE stop_name = VALUES(stop_name), address = COALESCE(VALUES(address), address), geom = VALUES(geom)`,
+    [stopId, stopName, address === undefined || address === "" ? null : address, `POINT(${lon} ${lat})`]
+  );
+}
+
 // Import dữ liệu từ JSON string hoặc file upload
 async function importJson(req, res) {
   let { type, route_id, direction, data } = req.body;
@@ -48,32 +64,38 @@ async function importJson(req, res) {
 
     let importedCount = 0;
     let extraDetails = {};
-    const dir = direction ? parseInt(direction) : 1;
+    const pkgDirection = jsonData && !Array.isArray(jsonData) ? jsonData.direction : undefined;
+    const dir = parseInt(direction || pkgDirection || 1);
 
     // A. NHẬP GÓI TRỌN GÓI (FULL PACKAGE TỪ get_coords_1.html: Bao gồm cả Lộ trình + Trạm dừng)
     if (type === "full_package" || type === "fullPackage") {
-      let targetRouteId = route_id;
-      
-      // Nếu chưa chọn route_id trên form, kiểm tra hoặc tự tạo từ routeName trong file
-      if (!targetRouteId) {
-        if (jsonData.routeName) {
-          const cleanName = jsonData.routeName.replace(/_/g, " ");
-          const [foundRoutes] = await conn.query(
-            "SELECT route_id FROM bus_routes WHERE route_name LIKE ? OR route_id = ?",
-            [`%${cleanName}%`, jsonData.routeName]
-          );
-          if (foundRoutes.length > 0) {
-            targetRouteId = foundRoutes[0].route_id;
-          } else {
-            targetRouteId = "BUS_" + Date.now().toString().slice(-4);
-            await conn.query(
-              "INSERT INTO bus_routes (route_id, route_number, route_name, distance_km, headway_min) VALUES (?, ?, ?, ?, ?)",
-              [targetRouteId, "AUTO", cleanName, 15.0, 10]
-            );
-          }
-        } else {
-          throw new Error("Vui lòng chọn Tuyến xe áp dụng để nạp gói dữ liệu trọn gói");
+      // Ưu tiên: route_id chọn trên form → route_id trong gói → route_number trong gói → tạo tuyến mới
+      let targetRouteId = route_id || null;
+
+      if (!targetRouteId && jsonData.route_id) {
+        const [found] = await conn.query("SELECT route_id FROM bus_routes WHERE route_id = ?", [String(jsonData.route_id)]);
+        if (found.length > 0) targetRouteId = found[0].route_id;
+      }
+
+      const routeNumber = jsonData.routeNumber ? String(jsonData.routeNumber).trim() : "";
+      if (!targetRouteId && routeNumber) {
+        const [found] = await conn.query("SELECT route_id FROM bus_routes WHERE route_number = ?", [routeNumber]);
+        if (found.length > 1) {
+          throw new Error(`Có ${found.length} tuyến cùng số hiệu '${routeNumber}', vui lòng chọn Tuyến xe cụ thể`);
         }
+        if (found.length === 1) targetRouteId = found[0].route_id;
+      }
+
+      if (!targetRouteId) {
+        if (!routeNumber || !jsonData.routeName) {
+          throw new Error("Gói dữ liệu không khớp tuyến nào: vui lòng chọn Tuyến xe, hoặc nhập Số hiệu + Tên tuyến để tạo tuyến mới");
+        }
+        targetRouteId = "BUS_" + Date.now().toString(36).toUpperCase();
+        await conn.query(
+          "INSERT INTO bus_routes (route_id, route_number, route_name) VALUES (?, ?, ?)",
+          [targetRouteId, routeNumber, jsonData.routeName.replace(/_/g, " ")]
+        );
+        extraDetails.created_route = true;
       }
 
       // 1. Lưu LineString Lộ trình
@@ -124,19 +146,12 @@ async function importJson(req, res) {
 
         if (lon !== undefined && lat !== undefined) {
           const stopName = st.name || st.stop_name || `Trạm ${idx + 1}`;
-          const stopAddress = st.address || "";
-          const stopOrder = st.stt || st.id || st.stop_order || (idx + 1);
-          const stopId = st.stop_id || `ST_${targetRouteId.replace(/[^a-zA-Z0-9]/g, "")}_D${dir}_${stopOrder}`;
+          // Thứ tự trong mảng là thứ tự trạm trên tuyến
+          const stopOrder = idx + 1;
+          // Giữ stop_id của trạm có sẵn trong CSDL; trạm vẽ mới thì sinh id riêng
+          const stopId = st.stop_id ? String(st.stop_id) : newStopId(stopOrder);
 
-          const pointWkt = `POINT(${lon} ${lat})`;
-
-          // Thêm / Cập nhật bảng bus_stops
-          await conn.query(
-            `INSERT INTO bus_stops (stop_id, stop_name, address, geom)
-             VALUES (?, ?, ?, ST_GeomFromText(?, 4326))
-             ON DUPLICATE KEY UPDATE stop_name = VALUES(stop_name), address = VALUES(address), geom = VALUES(geom)`,
-            [stopId, stopName, stopAddress, pointWkt]
-          );
+          await upsertStop(conn, stopId, stopName, st.address, lon, lat);
 
           // Gán vào bảng route_stops
           await conn.query(
@@ -152,6 +167,7 @@ async function importJson(req, res) {
 
       importedCount = stopsSaved;
       extraDetails = {
+        ...extraDetails,
         route_id: targetRouteId,
         direction: dir,
         path_points: pathSaved,
@@ -197,7 +213,7 @@ async function importJson(req, res) {
         rawList = jsonData.features.map((f, idx) => ({
           stop_id: f.properties?.stop_id,
           stop_name: f.properties?.stop_name || f.properties?.name || `Trạm ${idx + 1}`,
-          address: f.properties?.address || "",
+          address: f.properties?.address,
           longitude: f.geometry.coordinates[0],
           latitude: f.geometry.coordinates[1],
           stop_order: f.properties?.stop_order || f.properties?.stt || (idx + 1)
@@ -225,7 +241,7 @@ async function importJson(req, res) {
           return {
             stop_id: item.stop_id,
             stop_name: item.name || item.stop_name || `Trạm ${idx + 1}`,
-            address: item.address || "",
+            address: item.address,
             longitude: lon,
             latitude: lat,
             stop_order: item.stt || item.id || item.stop_order || (idx + 1)
@@ -241,15 +257,9 @@ async function importJson(req, res) {
       for (let idx = 0; idx < rawList.length; idx++) {
         const st = rawList[idx];
         if (st.longitude !== undefined && st.latitude !== undefined) {
-          const stopId = st.stop_id || (route_id ? `ST_${route_id.replace(/[^a-zA-Z0-9]/g, "")}_D${dir}_${st.stop_order}` : `ST_IMP_${Date.now()}_${idx + 1}`);
-          const wkt = `POINT(${st.longitude} ${st.latitude})`;
+          const stopId = st.stop_id ? String(st.stop_id) : newStopId(idx + 1);
 
-          await conn.query(
-            `INSERT INTO bus_stops (stop_id, stop_name, address, geom)
-             VALUES (?, ?, ?, ST_GeomFromText(?, 4326))
-             ON DUPLICATE KEY UPDATE stop_name = VALUES(stop_name), address = VALUES(address), geom = VALUES(geom)`,
-            [stopId, st.stop_name, st.address, wkt]
-          );
+          await upsertStop(conn, stopId, st.stop_name, st.address, st.longitude, st.latitude);
 
           if (route_id) {
             await conn.query(

@@ -1,10 +1,18 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
+
+const ROOT_DIR = path.join(__dirname, "..", "..");
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
+
+// Phục vụ giao diện tĩnh cùng cổng với API — chỉ mount đúng 2 thư mục, không mở cả repo (tránh lộ backend/.env)
+app.use("/frontend", express.static(path.join(ROOT_DIR, "frontend")));
+app.use("/tools", express.static(path.join(ROOT_DIR, "tools")));
+app.get("/", (req, res) => res.redirect("/frontend/index.html"));
 
 // Mỗi module tự khai báo đường dẫn con đầy đủ dưới /api/v1
 const modules = [

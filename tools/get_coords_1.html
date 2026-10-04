@@ -427,36 +427,42 @@
         <!-- 1. CẤU HÌNH TUYẾN XE -->
         <div class="card-box" style="background: #f0f9ff; border-color: #bae6fd;">
             <div class="card-title" style="color: #0369a1;">
-                <span><i class="fa-solid fa-bus"></i> 1. Thông Tin Tuyến & Tuyến Mẫu</span>
+                <span><i class="fa-solid fa-bus"></i> 1. Thông Tin Tuyến (Đồng bộ CSDL)</span>
                 <button class="btn btn-sm btn-secondary" onclick="createNewRoute()" title="Làm mới để build tuyến hoàn toàn mới">
                     <i class="fa-solid fa-plus"></i> Tạo Tuyến Mới
                 </button>
             </div>
 
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px; margin-bottom: 8px;">
+            <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 8px; margin-bottom: 8px;">
+                <div>
+                    <label style="color: #0284c7;">⚡ Nạp tuyến có sẵn từ CSDL:</label>
+                    <select id="busRouteSelect">
+                        <option value="">-- Đang tải danh sách tuyến... --</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Chiều:</label>
+                    <select id="routeDirection" onchange="updateRouteMeta()">
+                        <option value="1">1 - Lượt đi</option>
+                        <option value="2">2 - Lượt về</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn btn-sm btn-outline" onclick="loadRouteFromDb()" style="width: 100%; margin-bottom: 8px;" title="Nạp trạm dừng và lộ trình của tuyến + chiều đang chọn">
+                <i class="fa-solid fa-database"></i> Nạp Trạm & Lộ Trình Từ CSDL
+            </button>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
                 <div>
                     <label>Tên Tuyến Xe (Route Name):</label>
-                    <input type="text" id="customRouteName" value="Tuyen_Moi_Tu_Dung" placeholder="VD: Tuyen_19_Ben_Thanh_DHQG" oninput="updateRouteMeta()" />
+                    <input type="text" id="customRouteName" value="" placeholder="VD: Bến Thành - Đại học Quốc gia" oninput="updateRouteMeta()" />
                 </div>
                 <div>
                     <label>Số Hiệu:</label>
-                    <input type="text" id="customRouteNumber" value="99" placeholder="08, 10..." oninput="updateRouteMeta()" />
+                    <input type="text" id="customRouteNumber" value="" placeholder="08, 10..." oninput="updateRouteMeta()" />
                 </div>
             </div>
-
-            <div>
-                <label style="color: #0284c7;">⚡ Hoặc Chọn Tuyến Mẫu ĐHQG để nạp nhanh:</label>
-                <select id="busRouteSelect" onchange="loadPresetBusRoute()">
-                    <option value="">-- Chọn tuyến xe buýt mẫu --</option>
-                    <option value="19">Tuyến 19: Bến Thành - KCX Linh Trung - ĐHQG TP.HCM</option>
-                    <option value="33">Tuyến 33: Bến xe An Sương - Suối Tiên - ĐHQG TP.HCM</option>
-                    <option value="08">Tuyến 08: Bến xe Quận 8 - ĐH Quốc Gia</option>
-                    <option value="53">Tuyến 53: Lê Hồng Phong - ĐH Quốc Gia</option>
-                    <option value="99">Tuyến 99: Chợ Thạnh Mỹ Lợi - ĐH Quốc Gia</option>
-                    <option value="10">Tuyến 10: Bến xe Miền Tây - ĐHQG TP.HCM</option>
-                    <option value="50">Tuyến 50: ĐH Bách Khoa (CS1) - ĐHQG TP.HCM (CS2)</option>
-                </select>
-            </div>
+            <div id="routeLinkBadge" style="margin-top: 6px; font-size: 11px; color: #64748b;"></div>
         </div>
 
         <!-- 2. CHẾ ĐỘ CLICK BẢN ĐỒ -->
@@ -607,13 +613,27 @@
         let routePolyline = null;
 
         // Core State
-        let listStops = []; // [ { id, name, coords: [lon, lat], marker } ]
-        let keyWaypoints = []; // [ [lon, lat], ... ]
+        let listStops = []; // [ { id, stopId, name, coords: [lon, lat], marker } ] — stopId: stop_id trong CSDL (null nếu trạm vẽ mới)
+        let keyWaypoints = []; // [ [lon, lat], ... ] — điểm mốc vẽ thêm sau basePathCoords
+        let basePathCoords = []; // Lộ trình đã có (nạp từ CSDL/JSON), giữ nguyên khi vẽ nối tiếp
         let fullRouteCoords = []; // [ [lon, lat], ... ]
-        let currentRouteName = "Tuyen_Moi_Tu_Dung";
-        let currentRouteNumber = "99";
+        let currentRouteId = null; // route_id trong CSDL; null = tuyến mới
+        let currentRouteName = "";
+        let currentRouteNumber = "";
+        let currentDirection = 1;
+        let loadedDirection = null; // chiều của dữ liệu đang hiển thị (nạp từ CSDL/JSON)
         let currentTab = "fullPackage";
         let currentClickMode = "smartRoute";
+
+        // Công cụ được Express phục vụ tại :3000/tools/ → gọi API cùng origin; mở chỗ khác thì gọi về localhost:3000
+        const API_BASE = (location.protocol.startsWith("http") && location.port === "3000")
+            ? "/api/v1"
+            : "http://localhost:3000/api/v1";
+        let dbRoutes = [];
+
+        function escapeHtml(value) {
+            return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+        }
 
         // --------------------------------------------------------------------
         // 2. CHẾ ĐỘ CLICK BẢN ĐỒ & TƯƠNG TÁC
@@ -655,7 +675,7 @@
             } else if (currentClickMode === 'smartRoute') {
                 keyWaypoints.push([lon, lat]);
                 addWaypointMarker(lat, lon, keyWaypoints.length);
-                if (keyWaypoints.length === 1) {
+                if (keyWaypoints.length === 1 && basePathCoords.length === 0) {
                     fullRouteCoords = [[lon, lat]];
                     renderRoutePolyline();
                 } else {
@@ -665,23 +685,33 @@
             refreshExportView();
         });
 
-        // Routing OSRM
+        // Routing OSRM — nếu đã có lộ trình gốc thì nối tiếp từ điểm cuối của nó
         async function routeSnapRoad() {
-            if (keyWaypoints.length < 2) return;
-            const coordString = keyWaypoints.map(pt => `${pt[0]},${pt[1]}`).join(';');
+            const hasBase = basePathCoords.length > 0;
+            const points = hasBase ? [basePathCoords[basePathCoords.length - 1], ...keyWaypoints] : keyWaypoints;
+            if (points.length < 2) return;
+            const coordString = points.map(pt => `${pt[0]},${pt[1]}`).join(';');
             const url = `https://router.project-osrm.org/route/v1/driving/${coordString}?overview=full&geometries=geojson`;
 
+            let snapped = [...points];
             try {
                 const res = await fetch(url);
                 const data = await res.json();
                 if (data.routes && data.routes.length > 0) {
-                    fullRouteCoords = data.routes[0].geometry.coordinates;
-                    renderRoutePolyline();
+                    snapped = data.routes[0].geometry.coordinates;
                 }
-            } catch (err) {
-                fullRouteCoords = [...keyWaypoints];
-                renderRoutePolyline();
-            }
+            } catch (err) { }
+            fullRouteCoords = hasBase ? basePathCoords.concat(snapped.slice(1)) : snapped;
+            renderRoutePolyline();
+        }
+
+        // Đặt lộ trình có sẵn làm gốc (không đưa hàng trăm điểm vào OSRM)
+        function setBasePath(coords) {
+            basePathCoords = coords.map(pt => [pt[0], pt[1]]);
+            fullRouteCoords = [...basePathCoords];
+            keyWaypoints = [];
+            waypointsLayer.clearLayers();
+            renderRoutePolyline();
         }
 
         function renderRoutePolyline() {
@@ -712,12 +742,28 @@
         // --------------------------------------------------------------------
         // 3. QUẢN LÝ TRẠM DỪNG & DANH SÁCH TƯƠNG TÁC (CRUD STOPS)
         // --------------------------------------------------------------------
-        function addStopMarker(lat, lon, name, customId = null) {
+        function stopPopupHtml(stt, stopObj) {
+            const dbLine = stopObj.stopId
+                ? `<b>stop_id CSDL:</b> ${escapeHtml(stopObj.stopId)}<br/>`
+                : `<i style="color: #64748b;">Trạm mới (chưa có trong CSDL)</i><br/>`;
+            return `
+                <div style="font-size: 12px; line-height: 1.5;">
+                    <b style="color: #ea580c;">[#${stt}] ${escapeHtml(stopObj.name)}</b><br/>
+                    ${dbLine}
+                    <b>ArcGIS [Lon, Lat]:</b> [${stopObj.coords[0]}, ${stopObj.coords[1]}]<br/>
+                    <button onclick="deleteStopById(${stt})" style="margin-top: 6px; padding: 3px 8px; background: #dc2626; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                        <i class="fa-solid fa-trash"></i> Xóa trạm này
+                    </button>
+                </div>
+            `;
+        }
+
+        function addStopMarker(lat, lon, name, customId = null, dbStopId = null) {
             const stopId = customId || (listStops.length + 1);
-            
+
             const icon = L.divIcon({
                 className: 'custom-stop-divicon',
-                html: `<div class="bus-stop-marker" title="${name}" id="marker_stop_${stopId}">${stopId}</div>`,
+                html: `<div class="bus-stop-marker" title="${escapeHtml(name)}" id="marker_stop_${stopId}">${stopId}</div>`,
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
             });
@@ -729,6 +775,7 @@
 
             const stopObj = {
                 id: stopId,
+                stopId: dbStopId ? String(dbStopId) : null,
                 name: name,
                 coords: [lon, lat],
                 marker: marker
@@ -736,30 +783,13 @@
 
             listStops.push(stopObj);
 
-            marker.bindPopup(`
-                <div style="font-size: 12px; line-height: 1.5;">
-                    <b style="color: #ea580c;">[#${stopId}] ${name}</b><br/>
-                    <b>ArcGIS [Lon, Lat]:</b> [${lon}, ${lat}]<br/>
-                    <button onclick="deleteStopById(${stopId})" style="margin-top: 6px; padding: 3px 8px; background: #dc2626; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                        <i class="fa-solid fa-trash"></i> Xóa trạm này
-                    </button>
-                </div>
-            `);
+            marker.bindPopup(stopPopupHtml(stopId, stopObj));
 
             marker.on('dragend', function () {
                 const pos = marker.getLatLng();
                 const newLat = parseFloat(pos.lat.toFixed(6));
                 const newLon = parseFloat(pos.lng.toFixed(6));
                 stopObj.coords = [newLon, newLat];
-                marker.setPopupContent(`
-                    <div style="font-size: 12px; line-height: 1.5;">
-                        <b style="color: #ea580c;">[#${stopId}] ${stopObj.name}</b><br/>
-                        <b>ArcGIS [Lon, Lat]:</b> [${newLon}, ${newLat}]<br/>
-                        <button onclick="deleteStopById(${stopId})" style="margin-top: 6px; padding: 3px 8px; background: #dc2626; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                            <i class="fa-solid fa-trash"></i> Xóa trạm này
-                        </button>
-                    </div>
-                `);
                 renderStopsListUI();
                 refreshExportView();
             });
@@ -786,16 +816,18 @@
                 const stt = idx + 1;
                 st.id = stt; // Cập nhật lại số thứ tự liên tục
                 
-                // Cập nhật số hiển thị trên marker DOM nếu có
+                // Cập nhật số hiển thị và popup trên marker theo thứ tự mới
                 if (st.marker) {
                     const iconDiv = st.marker.getElement()?.querySelector('.bus-stop-marker');
                     if (iconDiv) iconDiv.innerText = stt;
+                    st.marker.setPopupContent(stopPopupHtml(stt, st));
                 }
 
+                const idTitle = st.stopId ? `stop_id CSDL: ${st.stopId}` : 'Trạm mới (chưa có trong CSDL)';
                 html += `
                     <div class="stop-item" id="stop_item_${stt}">
-                        <div class="stop-num">${stt}</div>
-                        <input type="text" class="stop-input" value="${st.name}" onchange="updateStopName(${stt}, this.value)" placeholder="Tên trạm..." title="Sửa tên trạm trực tiếp" />
+                        <div class="stop-num" title="${escapeHtml(idTitle)}" style="${st.stopId ? '' : 'background: #16a34a;'}">${stt}</div>
+                        <input type="text" class="stop-input" value="${escapeHtml(st.name)}" onchange="updateStopName(${stt}, this.value)" placeholder="Tên trạm..." title="Sửa tên trạm trực tiếp" />
                         <span class="stop-coords-text">[${st.coords[0].toFixed(4)}, ${st.coords[1].toFixed(4)}]</span>
                         <div class="stop-actions">
                             <button class="stop-action-btn" onclick="focusStop(${stt})" title="Xem vị trí trạm trên bản đồ"><i class="fa-solid fa-crosshairs"></i></button>
@@ -813,17 +845,7 @@
             const st = listStops.find(s => s.id === stt);
             if (st) {
                 st.name = newName || `Trạm ${stt}`;
-                if (st.marker) {
-                    st.marker.bindPopup(`
-                        <div style="font-size: 12px; line-height: 1.5;">
-                            <b style="color: #ea580c;">[#${stt}] ${st.name}</b><br/>
-                            <b>ArcGIS [Lon, Lat]:</b> [${st.coords[0]}, ${st.coords[1]}]<br/>
-                            <button onclick="deleteStopById(${stt})" style="margin-top: 6px; padding: 3px 8px; background: #dc2626; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                                <i class="fa-solid fa-trash"></i> Xóa trạm này
-                            </button>
-                        </div>
-                    `);
-                }
+                if (st.marker) st.marker.setPopupContent(stopPopupHtml(stt, st));
                 refreshExportView();
             }
         }
@@ -876,29 +898,56 @@
                 if (!confirm("Tạo tuyến mới sẽ xóa các điểm và trạm hiện tại trên bản đồ?")) return;
             }
             clearAllGraphics();
-            const rName = prompt("Nhập tên tuyến mới:", "Tuyen_Moi_Tu_Dung");
-            if (rName) {
-                document.getElementById('customRouteName').value = rName.replace(/\s+/g, '_');
-                currentRouteName = document.getElementById('customRouteName').value;
-            }
-            refreshExportView();
+            setRouteLink(null);
+            document.getElementById('busRouteSelect').value = "";
+            const rNumber = prompt("Nhập số hiệu tuyến mới:", "");
+            const rName = prompt("Nhập tên tuyến mới:", "");
+            document.getElementById('customRouteNumber').value = (rNumber || "").trim();
+            document.getElementById('customRouteName').value = (rName || "").trim();
+            updateRouteMeta();
         }
 
         function updateRouteMeta() {
-            currentRouteName = document.getElementById('customRouteName').value.trim() || "Tuyen_Moi";
-            currentRouteNumber = document.getElementById('customRouteNumber').value.trim() || "99";
+            currentRouteName = document.getElementById('customRouteName').value.trim();
+            currentRouteNumber = document.getElementById('customRouteNumber').value.trim();
+            currentDirection = parseInt(document.getElementById('routeDirection').value) || 1;
+            renderRouteLinkBadge();
             refreshExportView();
+        }
+
+        // Gắn / bỏ gắn bản vẽ với một tuyến trong CSDL (route_id đi kèm file xuất)
+        function setRouteLink(routeId) {
+            currentRouteId = routeId ? String(routeId) : null;
+            renderRouteLinkBadge();
+        }
+
+        function renderRouteLinkBadge() {
+            const badge = document.getElementById('routeLinkBadge');
+            if (currentRouteId) {
+                badge.innerHTML = `🔗 Gắn với tuyến CSDL <b>route_id = ${escapeHtml(currentRouteId)}</b>, chiều <b>${currentDirection}</b> — import sẽ ghi đè trạm & lộ trình của chiều này.`;
+                if (loadedDirection && loadedDirection !== currentDirection) {
+                    badge.innerHTML += `<br/><span style="color: #d97706;">⚠ Dữ liệu trên bản đồ là chiều <b>${loadedDirection}</b> — bấm "Nạp" để lấy chiều ${currentDirection}, hoặc giữ nguyên nếu muốn chép sang chiều ${currentDirection}.</span>`;
+                }
+            } else {
+                const dup = currentRouteNumber && dbRoutes.some(r => r.route_number === currentRouteNumber);
+                badge.innerHTML = dup
+                    ? `<span style="color: #d97706;">⚠ Số hiệu <b>${escapeHtml(currentRouteNumber)}</b> đã tồn tại trong CSDL — import sẽ ghi vào tuyến đó.</span>`
+                    : `🆕 Tuyến mới — import sẽ tạo tuyến với số hiệu & tên ở trên.`;
+            }
         }
 
         function undoLastRoutePoint() {
             if (keyWaypoints.length === 0) return;
             keyWaypoints.pop();
-            
+
             // Xóa điểm mốc cuối trên layer
             waypointsLayer.clearLayers();
             keyWaypoints.forEach((pt, i) => addWaypointMarker(pt[1], pt[0], i + 1));
 
-            if (keyWaypoints.length >= 2) {
+            if (basePathCoords.length > 0) {
+                if (keyWaypoints.length > 0) routeSnapRoad();
+                else { fullRouteCoords = [...basePathCoords]; renderRoutePolyline(); }
+            } else if (keyWaypoints.length >= 2) {
                 routeSnapRoad();
             } else if (keyWaypoints.length === 1) {
                 fullRouteCoords = [keyWaypoints[0]];
@@ -914,7 +963,12 @@
             if (fullRouteCoords.length > 0) {
                 fullRouteCoords.reverse();
             }
-            if (keyWaypoints.length > 0) {
+            if (basePathCoords.length > 0) {
+                // Đảo cả phần đã vẽ thêm vào lộ trình gốc để vẽ nối tiếp từ đầu mới
+                basePathCoords = [...fullRouteCoords];
+                keyWaypoints = [];
+                waypointsLayer.clearLayers();
+            } else if (keyWaypoints.length > 0) {
                 keyWaypoints.reverse();
                 waypointsLayer.clearLayers();
                 keyWaypoints.forEach((pt, i) => addWaypointMarker(pt[1], pt[0], i + 1));
@@ -942,8 +996,8 @@
             if (routePolyline) map.removeLayer(routePolyline);
             listStops = [];
             keyWaypoints = [];
+            basePathCoords = [];
             fullRouteCoords = [];
-            document.getElementById('busRouteSelect').value = "";
             renderStopsListUI();
             refreshExportView();
         }
@@ -969,12 +1023,15 @@
 
             if (currentTab === 'fullPackage') {
                 const fullPkg = {
-                    routeName: currentRouteName,
+                    route_id: currentRouteId,
                     routeNumber: currentRouteNumber,
+                    routeName: currentRouteName,
+                    direction: currentDirection,
                     totalStops: listStops.length,
                     totalPathPoints: fullRouteCoords.length,
                     stops: listStops.map((s, idx) => ({
-                        id: idx + 1,
+                        stop_order: idx + 1,
+                        stop_id: s.stopId,
                         name: s.name,
                         geometry: { type: "Point", coordinates: s.coords }
                     })),
@@ -988,6 +1045,7 @@
             } else if (currentTab === 'stopsJson') {
                 const exportStops = listStops.map((s, idx) => ({
                     stt: idx + 1,
+                    stop_id: s.stopId,
                     name: s.name,
                     coords_arcgis_wgs84: s.coords,
                     coords_google_maps: [s.coords[1], s.coords[0]]
@@ -998,9 +1056,9 @@
                 outputBox.value = JSON.stringify(fullRouteCoords);
 
             } else if (currentTab === 'stopsCsv') {
-                let csv = "STT,Ten_Tram,Kinh_Do_Longitude_X,Vi_Do_Latitude_Y\n";
+                let csv = "STT,Stop_ID,Ten_Tram,Kinh_Do_Longitude_X,Vi_Do_Latitude_Y\n";
                 listStops.forEach((s, idx) => {
-                    csv += `${idx + 1},"${s.name}",${s.coords[0]},${s.coords[1]}\n`;
+                    csv += `${idx + 1},${s.stopId || ""},"${s.name.replace(/"/g, '""')}",${s.coords[0]},${s.coords[1]}\n`;
                 });
                 outputBox.value = csv;
             }
@@ -1021,29 +1079,28 @@
                 // 1. Gói Trọn Gói (Full Package)
                 if (data.routeGeometry || (data.stops && Array.isArray(data.stops))) {
                     clearAllGraphics();
-                    if (data.routeName) {
-                        document.getElementById('customRouteName').value = data.routeName;
-                        currentRouteName = data.routeName;
+                    document.getElementById('customRouteName').value = data.routeName || "";
+                    document.getElementById('customRouteNumber').value = data.routeNumber || "";
+                    if (data.direction === 1 || data.direction === 2) {
+                        document.getElementById('routeDirection').value = String(data.direction);
                     }
-                    if (data.routeNumber) {
-                        document.getElementById('customRouteNumber').value = data.routeNumber;
-                        currentRouteNumber = data.routeNumber;
-                    }
+                    loadedDirection = data.direction === 1 || data.direction === 2 ? data.direction : null;
+                    setRouteLink(data.route_id);
+                    document.getElementById('busRouteSelect').value = currentRouteId || "";
+                    updateRouteMeta();
 
                     // Nạp trạm
                     if (Array.isArray(data.stops)) {
                         data.stops.forEach(st => {
                             const lon = st.geometry ? st.geometry.coordinates[0] : (st.coords_arcgis_wgs84 ? st.coords_arcgis_wgs84[0] : st.coords[0]);
                             const lat = st.geometry ? st.geometry.coordinates[1] : (st.coords_arcgis_wgs84 ? st.coords_arcgis_wgs84[1] : st.coords[1]);
-                            addStopMarker(lat, lon, st.name || `Trạm ${st.id || listStops.length + 1}`);
+                            addStopMarker(lat, lon, st.name || `Trạm ${listStops.length + 1}`, null, st.stop_id);
                         });
                     }
 
                     // Nạp lộ trình
                     if (data.routeGeometry && Array.isArray(data.routeGeometry.coordinates)) {
-                        fullRouteCoords = data.routeGeometry.coordinates;
-                        keyWaypoints = [...fullRouteCoords];
-                        renderRoutePolyline();
+                        setBasePath(data.routeGeometry.coordinates);
                     }
                     fitMapToRoute();
                     alert("✓ Đã áp dụng thành công Gói Trọn Gói lên Bản đồ!");
@@ -1051,9 +1108,7 @@
 
                 // 2. Mảng Lộ trình Polyline [[lon, lat], ...]
                 else if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0]) && typeof data[0][0] === "number") {
-                    fullRouteCoords = data;
-                    keyWaypoints = [...data];
-                    renderRoutePolyline();
+                    setBasePath(data);
                     fitMapToRoute();
                     alert(`✓ Đã vẽ lại Lộ trình với ${data.length} điểm tọa độ!`);
                 }
@@ -1065,7 +1120,7 @@
                     data.forEach(st => {
                         const lon = st.coords_arcgis_wgs84 ? st.coords_arcgis_wgs84[0] : (st.geometry ? st.geometry.coordinates[0] : st.coords[0]);
                         const lat = st.coords_arcgis_wgs84 ? st.coords_arcgis_wgs84[1] : (st.geometry ? st.geometry.coordinates[1] : st.coords[1]);
-                        addStopMarker(lat, lon, st.name || `Trạm ${st.stt || listStops.length + 1}`);
+                        addStopMarker(lat, lon, st.name || `Trạm ${st.stt || listStops.length + 1}`, null, st.stop_id);
                     });
                     fitMapToRoute();
                     alert(`✓ Đã nạp lại ${data.length} trạm dừng lên Bản đồ!`);
@@ -1092,7 +1147,8 @@
             const isCsv = currentTab === 'stopsCsv';
             const ext = isCsv ? 'csv' : 'json';
             const mime = isCsv ? 'text/csv;charset=utf-8;' : 'application/json;charset=utf-8;';
-            const filename = `bus_${currentRouteName}_${currentTab}.${ext}`;
+            const routeTag = (currentRouteNumber || "moi").replace(/[^a-zA-Z0-9-]/g, "_");
+            const filename = `bus_${routeTag}_D${currentDirection}_${currentTab}.${ext}`;
 
             const blob = new Blob([content], { type: mime });
             const link = document.createElement('a');
@@ -1102,141 +1158,79 @@
         }
 
         // --------------------------------------------------------------------
-        // 6. CƠ SỞ DỮ LIỆU CÁC TUYẾN BUS MẪU
+        // 6. NẠP TUYẾN / TRẠM / LỘ TRÌNH TỪ CSDL (API backend)
         // --------------------------------------------------------------------
-        const PRESET_BUS_ROUTES = {
-            "19": {
-                name: "Tuyen_19_Ben_Thanh_DHQG",
-                number: "19",
-                stops: [
-                    { name: "Bến xe buýt Sài Gòn (Hàm Nghi)", coords: [106.702160, 10.771250] },
-                    { name: "Trạm ĐH KHXH&NV Q1 (Đinh Tiên Hoàng)", coords: [106.701380, 10.787120] },
-                    { name: "Trạm Cầu Sài Gòn (Xa Lộ Hà Nội)", coords: [106.726210, 10.799830] },
-                    { name: "Trạm Metro Thảo Điền", coords: [106.738500, 10.802100] },
-                    { name: "Trạm Ngã tư Bình Thái", coords: [106.765200, 10.835400] },
-                    { name: "Trạm Ngã tư Thủ Đức", coords: [106.772580, 10.849120] },
-                    { name: "Trạm Khu Công Nghệ Cao (SHTP)", coords: [106.784500, 10.858200] },
-                    { name: "Trạm ĐH Nông Lâm TP.HCM", coords: [106.790930, 10.869850] },
-                    { name: "Trạm KTX Khu A ĐHQG", coords: [106.799800, 10.878500] },
-                    { name: "Trạm ĐH Quốc Tế - ĐHQG", coords: [106.803200, 10.877800] },
-                    { name: "Trạm ĐH Bách Khoa CS2 (ĐHQG)", coords: [106.806200, 10.880500] },
-                    { name: "Trạm Bến xe Buýt Khu B ĐHQG", coords: [106.812300, 10.883200] }
-                ],
-                waypoints: [
-                    [106.702160, 10.771250],
-                    [106.701380, 10.787120],
-                    [106.726210, 10.799830],
-                    [106.772580, 10.849120],
-                    [106.790930, 10.869850],
-                    [106.803200, 10.877800],
-                    [106.812300, 10.883200]
-                ]
-            },
-            "33": {
-                name: "Tuyen_33_An_Suong_Suoi_Tien_DHQG",
-                number: "33",
-                stops: [
-                    { name: "Bến xe An Sương", coords: [106.618950, 10.846520] },
-                    { name: "Trạm Cầu vượt Quang Trung", coords: [106.634120, 10.852300] },
-                    { name: "Trạm Chợ Cầu", coords: [106.652100, 10.857200] },
-                    { name: "Trạm Ngã tư Ga", coords: [106.685300, 10.865100] },
-                    { name: "Trạm Chợ Đầu Mối Nông Sản Thủ Đức", coords: [106.727500, 10.869200] },
-                    { name: "Trạm Cầu Vượt Sóng Thần", coords: [106.748500, 10.874100] },
-                    { name: "Trạm ĐH Nông Lâm", coords: [106.790930, 10.869850] },
-                    { name: "Trạm KDL Suối Tiên", coords: [106.801200, 10.866500] },
-                    { name: "Trạm Bến xe Miền Đông Mới", coords: [106.815200, 10.875300] },
-                    { name: "Trạm KTX Khu B ĐHQG", coords: [106.812300, 10.883200] }
-                ],
-                waypoints: [
-                    [106.618950, 10.846520],
-                    [106.634120, 10.852300],
-                    [106.685300, 10.865100],
-                    [106.727500, 10.869200],
-                    [106.790930, 10.869850],
-                    [106.801200, 10.866500],
-                    [106.812300, 10.883200]
-                ]
-            },
-            "53": {
-                name: "Tuyen_53_Le_Hong_Phong_DHQG",
-                number: "53",
-                stops: [
-                    { name: "Bến xe Lê Hồng Phong (Q10)", coords: [106.677500, 10.763500] },
-                    { name: "Trạm BV Nhi Đồng 1", coords: [106.671200, 10.769800] },
-                    { name: "Trạm Vòng xoay Dân Chủ", coords: [106.682100, 10.777900] },
-                    { name: "Trạm Ngã tư Hàng Xanh", coords: [106.712100, 10.801200] },
-                    { name: "Trạm ĐH Quốc Tế - ĐHQG", coords: [106.803200, 10.877800] },
-                    { name: "Trạm ĐH Khoa Học Tự Nhiên CS2", coords: [106.800500, 10.876200] }
-                ],
-                waypoints: [
-                    [106.677500, 10.763500],
-                    [106.712100, 10.801200],
-                    [106.772580, 10.849120],
-                    [106.803200, 10.877800]
-                ]
-            },
-            "08": {
-                name: "Tuyen_08_Ben_Xe_Q8_DHQG",
-                number: "08",
-                stops: [
-                    { name: "Bến xe Quận 8", coords: [106.651200, 10.732100] },
-                    { name: "Trạm Cầu Chà Và", coords: [106.662100, 10.748500] },
-                    { name: "Trạm ĐH Sư Phạm TP.HCM", coords: [106.681200, 10.761200] },
-                    { name: "Trạm Ngã tư Thủ Đức", coords: [106.772580, 10.849120] },
-                    { name: "Trạm ĐH Bách Khoa CS2", coords: [106.806200, 10.880500] },
-                    { name: "Trạm KTX Khu A ĐHQG", coords: [106.799800, 10.878500] }
-                ],
-                waypoints: [
-                    [106.651200, 10.732100],
-                    [106.681200, 10.761200],
-                    [106.772580, 10.849120],
-                    [106.806200, 10.880500]
-                ]
-            },
-            "99": {
-                name: "Tuyen_99_Thanh_My_Loi_DHQG",
-                number: "99",
-                stops: [
-                    { name: "Chợ Thạnh Mỹ Lợi (TP. Thủ Đức)", coords: [106.775200, 10.765400] },
-                    { name: "Trạm ĐH Giao Thông Vận Tải CS2", coords: [106.786500, 10.843200] },
-                    { name: "Trạm ĐH Quốc Tế ĐHQG", coords: [106.803200, 10.877800] },
-                    { name: "Trạm KTX Khu B ĐHQG", coords: [106.812300, 10.883200] }
-                ],
-                waypoints: [
-                    [106.775200, 10.765400],
-                    [106.786500, 10.843200],
-                    [106.803200, 10.877800],
-                    [106.812300, 10.883200]
-                ]
+        async function fetchJson(path) {
+            const res = await fetch(API_BASE + path);
+            if (!res.ok) {
+                const err = new Error(`HTTP ${res.status}`);
+                err.status = res.status;
+                throw err;
             }
-        };
+            return res.json();
+        }
 
-        async function loadPresetBusRoute() {
-            const selected = document.getElementById('busRouteSelect').value;
-            if (!selected || !PRESET_BUS_ROUTES[selected]) return;
+        async function loadDbRouteList() {
+            const select = document.getElementById('busRouteSelect');
+            try {
+                dbRoutes = await fetchJson('/routes');
+                select.innerHTML = "";
+                select.add(new Option(`-- Chọn tuyến (${dbRoutes.length} tuyến trong CSDL) --`, ""));
+                dbRoutes.forEach(r => select.add(new Option(`${r.route_number} — ${r.route_name}`, r.route_id)));
+            } catch (err) {
+                select.innerHTML = "";
+                select.add(new Option("⚠ Không kết nối được backend (localhost:3000)", ""));
+            }
+            renderRouteLinkBadge();
+        }
+
+        async function loadRouteFromDb() {
+            const routeId = document.getElementById('busRouteSelect').value;
+            if (!routeId) return alert("Vui lòng chọn tuyến trong danh sách CSDL!");
+            const route = dbRoutes.find(r => String(r.route_id) === String(routeId));
+            const direction = parseInt(document.getElementById('routeDirection').value) || 1;
+
+            if (listStops.length > 0 || fullRouteCoords.length > 0) {
+                if (!confirm("Nạp tuyến từ CSDL sẽ thay thế các điểm và trạm hiện tại trên bản đồ?")) return;
+            }
+
+            let stops, path = null;
+            try {
+                stops = await fetchJson(`/routes/${encodeURIComponent(routeId)}/stops?direction=${direction}`);
+                try {
+                    path = await fetchJson(`/routes/${encodeURIComponent(routeId)}/path?direction=${direction}`);
+                } catch (err) {
+                    if (err.status !== 404) throw err; // 404 = chiều này chưa có lộ trình
+                }
+            } catch (err) {
+                return alert("❌ Không tải được dữ liệu tuyến từ CSDL: " + err.message);
+            }
 
             clearAllGraphics();
-            const routeData = PRESET_BUS_ROUTES[selected];
-            currentRouteName = routeData.name;
-            currentRouteNumber = routeData.number || selected;
-            document.getElementById('customRouteName').value = currentRouteName;
-            document.getElementById('customRouteNumber').value = currentRouteNumber;
+            document.getElementById('customRouteName').value = route ? route.route_name : "";
+            document.getElementById('customRouteNumber').value = route ? route.route_number : "";
+            loadedDirection = direction;
+            setRouteLink(routeId);
+            updateRouteMeta();
 
-            routeData.stops.forEach((st, idx) => {
-                addStopMarker(st.coords[1], st.coords[0], st.name, idx + 1);
-            });
+            stops
+                .sort((a, b) => a.stop_order - b.stop_order)
+                .forEach(st => addStopMarker(st.latitude, st.longitude, st.stop_name, null, st.stop_id));
 
-            keyWaypoints = routeData.waypoints ? [...routeData.waypoints] : [];
-            keyWaypoints.forEach((pt, i) => addWaypointMarker(pt[1], pt[0], i + 1));
+            const coords = path && path.geometry && Array.isArray(path.geometry.coordinates) ? path.geometry.coordinates : [];
+            if (coords.length > 0) setBasePath(coords);
 
-            await routeSnapRoad();
             fitMapToRoute();
             refreshExportView();
+            if (stops.length === 0 && coords.length === 0) {
+                alert(`Tuyến ${route ? route.route_number : routeId} chiều ${direction} chưa có trạm và lộ trình trong CSDL.`);
+            }
         }
 
         // Init
         renderStopsListUI();
         refreshExportView();
+        loadDbRouteList();
     </script>
 </body>
 

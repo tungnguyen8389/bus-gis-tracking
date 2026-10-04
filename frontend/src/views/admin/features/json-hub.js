@@ -37,7 +37,9 @@ export function onJsonHubShown() {
 async function loadRoutesForImport() {
   try {
     await ensureRoutesLoaded();
-    document.getElementById("import_route_id").innerHTML = routeOptionsHtml();
+    // Option rỗng: để backend tự khớp theo route_id / số hiệu trong gói, hoặc tạo tuyến mới
+    document.getElementById("import_route_id").innerHTML =
+      `<option value="">-- Theo gói dữ liệu (route_id / số hiệu trong JSON) --</option>` + routeOptionsHtml();
   } catch (e) {}
 }
 
@@ -54,7 +56,7 @@ export function handleImportTypeChange() {
 
   const textarea = document.getElementById("import_json_textarea");
   if (type === "full_package") {
-    textarea.placeholder = `{\n  "routeName": "Tuyen_19_Ben_Thanh_DHQG",\n  "totalStops": 12,\n  "totalPathPoints": 150,\n  "stops": [\n    { "id": 1, "name": "Bến xe buýt Sài Gòn", "geometry": { "type": "Point", "coordinates": [106.70216, 10.77125] } }\n  ],\n  "routeGeometry": {\n    "type": "LineString",\n    "coordinates": [[106.70216, 10.77125], [106.70138, 10.78712]]\n  }\n}`;
+    textarea.placeholder = `{\n  "route_id": "41",\n  "routeNumber": "19",\n  "routeName": "Bến Thành - Khu chế xuất Linh Trung - Đại học Quốc gia",\n  "direction": 2,\n  "stops": [\n    { "stop_order": 1, "stop_id": "7829", "name": "Bến xe buýt Khu A - Đại học Quốc gia TP.HCM", "geometry": { "type": "Point", "coordinates": [106.807659, 10.874479] } }\n  ],\n  "routeGeometry": {\n    "type": "LineString",\n    "coordinates": [[106.70216, 10.77125], [106.70138, 10.78712]]\n  }\n}`;
   } else if (type === "route_path") {
     textarea.placeholder = `[\n  [106.795000, 10.863000],\n  [106.798000, 10.866000],\n  [106.800000, 10.870000]\n]`;
   } else if (type === "stops") {
@@ -83,13 +85,18 @@ export function onJsonInputChanged() {
     if (data.routeGeometry && data.stops) {
       setBadge(`📦 Gói Trọn Gói (${data.stops.length} trạm, ${data.routeGeometry.coordinates?.length || 0} điểm lộ trình)`, "#dcfce7", "#15803d");
 
-      // Thử tìm khớp tuyến nếu có routeName
-      if (data.routeName && state.routes.length > 0) {
-        const clean = data.routeName.toLowerCase().replace(/_/g, " ");
-        const matched = state.routes.find(r => clean.includes(r.route_number.toLowerCase()) || r.route_name.toLowerCase().includes(clean));
-        if (matched) {
-          document.getElementById("import_route_id").value = matched.route_id;
+      // Khớp tuyến theo route_id, rồi số hiệu chính xác (chỉ khi số hiệu là duy nhất)
+      if (state.routes.length > 0) {
+        let matched = data.route_id ? state.routes.find(r => String(r.route_id) === String(data.route_id)) : null;
+        if (!matched && data.routeNumber) {
+          const sameNumber = state.routes.filter(r => r.route_number === String(data.routeNumber).trim());
+          if (sameNumber.length === 1) matched = sameNumber[0];
         }
+        // Không khớp → bỏ chọn, tránh gói tuyến mới ghi đè vào tuyến chọn từ lần dán trước
+        document.getElementById("import_route_id").value = matched ? matched.route_id : "";
+      }
+      if (data.direction === 1 || data.direction === 2) {
+        document.getElementById("import_direction").value = String(data.direction);
       }
     } else if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0]) && typeof data[0][0] === "number") {
       setBadge(`🛣️ Lộ trình routeJson (${data.length} điểm tọa độ)`, "#e0f2fe", "#0369a1");

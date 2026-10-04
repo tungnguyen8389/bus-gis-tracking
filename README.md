@@ -77,14 +77,14 @@ npm run db:import
 cd backend
 npm start
 ```
-> Server sẽ lắng nghe tại: `http://localhost:3000`
+> Server sẽ lắng nghe tại: `http://localhost:3000` — phục vụ cả API lẫn giao diện tĩnh (`frontend/`, `tools/`), không cần Apache/XAMPP.
 
 ### 3. Bộ giả lập GPS xe buýt (đang tạm tắt)
 `npm run simulate` hiện chỉ in thông báo và thoát: simulator chưa được tối ưu cho 332 lộ trình TP.HCM (tự sinh 2–3 xe mỗi lộ trình, phát 500ms/lần). Nếu vẫn cần chạy thử: `node simulator.js`.
 
 ### 4. Truy cập Hệ thống
-* **Giao diện Bản đồ Giám sát Real-time:** `http://localhost/Bus_project/frontend/index.html`
-* **Trang Quản trị Hệ thống (Admin Portal):** `http://localhost/Bus_project/frontend/admin.html`
-* **Công cụ lấy tọa độ:** `tools/coordinate_picker.html`
-* **Công cụ chuyển tọa độ Google Maps:** `tools/google_maps_importer.html`
+* **Giao diện Bản đồ Giám sát Real-time:** `http://localhost:3000/` (chuyển tới `/frontend/index.html`)
+* **Trang Quản trị Hệ thống (Admin Portal):** `http://localhost:3000/frontend/admin.html`
+* **Công cụ lấy tọa độ:** `http://localhost:3000/tools/get_coords_1.html`
+* **Công cụ chuyển tọa độ Google Maps:** `http://localhost:3000/tools/google_maps_importer.html`
 
