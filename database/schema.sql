@@ -8,27 +8,28 @@ CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE bus_management_db;
 
--- 0. Bảng Người dùng & Phân quyền Quản trị (Auth & Users)
+-- Xóa bảng cũ theo thứ tự con → cha (vehicles tham chiếu users, logs/schedules tham chiếu vehicles)
+DROP TABLE IF EXISTS vehicle_tracking_logs;
+DROP TABLE IF EXISTS schedules;
+DROP TABLE IF EXISTS route_stops;
+DROP TABLE IF EXISTS route_paths;
+DROP TABLE IF EXISTS vehicles;
+DROP TABLE IF EXISTS bus_stops;
+DROP TABLE IF EXISTS bus_routes;
 DROP TABLE IF EXISTS users;
+
+-- 0. Bảng Người dùng & Phân quyền (ADMIN/MANAGER quản trị, DRIVER tài xế)
 CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     email VARCHAR(100),
-    role ENUM('ADMIN', 'MANAGER', 'VIEWER') DEFAULT 'MANAGER',
+    role ENUM('ADMIN', 'MANAGER', 'VIEWER', 'DRIVER') DEFAULT 'MANAGER',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- 1. Bảng Tuyến xe buýt (Thực thể thuộc tính)
-DROP TABLE IF EXISTS route_stops;
-DROP TABLE IF EXISTS route_paths;
-DROP TABLE IF EXISTS vehicle_tracking_logs;
-DROP TABLE IF EXISTS schedules;
-DROP TABLE IF EXISTS vehicles;
-DROP TABLE IF EXISTS bus_stops;
-DROP TABLE IF EXISTS bus_routes;
-
 CREATE TABLE bus_routes (
     route_id VARCHAR(20) PRIMARY KEY,
     route_number VARCHAR(10) NOT NULL,
@@ -82,7 +83,9 @@ CREATE TABLE vehicles (
     plate_number VARCHAR(20) NOT NULL UNIQUE,
     capacity INT DEFAULT 40,
     driver_name VARCHAR(100),
-    status VARCHAR(30) DEFAULT 'ACTIVE'
+    status VARCHAR(30) DEFAULT 'ACTIVE',
+    driver_user_id INT NULL UNIQUE,                  -- Tài khoản tài xế phụ trách (1 tài xế ↔ 1 xe)
+    CONSTRAINT fk_vehicles_driver FOREIGN KEY (driver_user_id) REFERENCES users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- 6. Bảng Lịch trình khởi hành
