@@ -258,13 +258,24 @@ function onFleetLocationUpdate(data) {
   }
 }
 
+// Xe kết thúc chuyến hoặc thiết bị mất kết nối → gỡ khỏi bản đồ và xóa cache hoạt họa
+function onVehicleOffline({ vehicle_id } = {}) {
+  const g = state.busGraphics[vehicle_id];
+  if (g && map.fleetLayer) map.fleetLayer.remove(g);
+  delete state.busGraphics[vehicle_id];
+  delete busAnimStates[vehicle_id];
+  delete busCurrentPositions[vehicle_id];
+  if (state.selectedTrackedVehicleId === vehicle_id) state.selectedTrackedVehicleId = null;
+}
+
 export function initSocketRealtime() {
   try {
     if (socketInstance) return;
     socketInstance = connectRealtime({
       onConnect: () => setConnectionStatus("ONLINE", "badge-status"),
       onDisconnect: () => setConnectionStatus("OFFLINE", "badge-status badge-disconnected"),
-      onFleetUpdate: onFleetLocationUpdate
+      onFleetUpdate: onFleetLocationUpdate,
+      onVehicleOffline
     });
   } catch (err) {
     console.warn("Lỗi kết nối Socket:", err);
