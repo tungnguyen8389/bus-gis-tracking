@@ -7,7 +7,13 @@ import { connectDevice, emitWithAck } from "../../../modules/realtime/device.ser
 import { refreshSourceBadge } from "./drive-map.js";
 
 const MIN_SEND_INTERVAL_MS = 1000;
-const gps = { socket: null, watchId: null, wakeLock: null, lastSentAt: 0 };
+const RETRY_DELAY_MS = 5000;
+// gen: tăng mỗi khi dừng phát → lần "Bắt đầu" đang chờ (kết nối/ack) thấy gen đổi thì tự hủy
+const gps = { socket: null, watchId: null, wakeLock: null, lastSentAt: 0, gen: 0, retryTimer: null };
+
+// Phiên hết hạn / bị từ chối: driver.view đăng ký hàm đưa người dùng về màn đăng nhập (tránh import vòng)
+let sessionExpiredHandler = null;
+export function onSessionExpired(fn) { sessionExpiredHandler = fn; }
 
 const START_ERRORS = {
   UNAUTHORIZED: "Phiên đăng nhập hết hạn, hãy đăng nhập lại",
@@ -60,20 +66,67 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
+function handleUnauthorized() {
+  stopBroadcast({ endTrip: false });
+  showToast(START_ERRORS.UNAUTHORIZED, "error");
+  if (sessionExpiredHandler) sessionExpiredHandler();
+}
+
+function scheduleRetry(socket, action) {
+  clearTimeout(gps.retryTimer);
+  gps.retryTimer = setTimeout(() => {
+    gps.retryTimer = null;
+    if (socket === gps.socket && state.broadcasting) action();
+  }, RETRY_DELAY_MS);
+}
+
+// Kết nối lại: gửi lại trip:start, kiểm tra ack. Lỗi tạm thời (SERVER_ERROR/quá hạn ack) → thử lại sau 5 s
+async function resumeTrip(socket) {
+  try {
+    const ack = await startTrip(socket);
+    if (socket !== gps.socket || ack.ok) return;
+    if (ack.error === "SERVER_ERROR") return scheduleRetry(socket, () => { if (socket.connected) resumeTrip(socket); });
+    stopBroadcast({ endTrip: false });
+    showToast(START_ERRORS[ack.error] || "Không tiếp tục được chuyến sau khi kết nối lại", "error");
+  } catch {
+    if (socket === gps.socket) scheduleRetry(socket, () => { if (socket.connected) resumeTrip(socket); });
+  }
+}
+
+// Server từ chối handshake khi kết nối lại (socket không tự thử lại)
+function onDeviceRejected(err, socket) {
+  if (socket !== gps.socket || !state.broadcasting) return;
+  const code = err?.message;
+  if (code === "UNAUTHORIZED") return handleUnauthorized();
+  if (code === "NO_VEHICLE") {
+    stopBroadcast({ endTrip: false });
+    showToast(START_ERRORS.NO_VEHICLE, "error");
+    return;
+  }
+  scheduleRetry(socket, () => socket.connect()); // SERVER_ERROR hoặc lỗi lạ: thử lại sau 5 s
+}
+
 async function startBroadcast() {
   if (!window.isSecureContext || !navigator.geolocation) {
     showToast("Cần HTTPS hoặc localhost để dùng GPS điện thoại", "error");
     return;
   }
+  const gen = ++gps.gen;
+  const cancelled = () => gen !== gps.gen; // người dùng rời màn Chạy xe trong lúc đang chờ
+  let socket = null;
   try {
-    gps.socket = await connectDevice(getToken(DRIVER_TOKEN_KEY), {
-      onReconnect: socket => startTrip(socket).catch(() => {}),
+    socket = await connectDevice(getToken(DRIVER_TOKEN_KEY), {
+      onReconnect: resumeTrip,
+      onRejected: onDeviceRejected,
       onReplaced: () => {
         document.getElementById("replacedBanner").hidden = false;
         stopBroadcast({ endTrip: false });
       }
     });
-    const ack = await startTrip(gps.socket);
+    if (cancelled()) { socket.disconnect(); return; }
+    gps.socket = socket;
+    const ack = await startTrip(socket);
+    if (cancelled()) return; // stopBroadcast đã ngắt socket
     if (!ack.ok) throw new Error(ack.error);
 
     state.broadcasting = true;
@@ -84,10 +137,13 @@ async function startBroadcast() {
       { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
     await requestWakeLock();
+    if (cancelled()) { await releaseWakeLock(); return; }
     renderButton();
     refreshSourceBadge();
     showToast("Đã bắt đầu chuyến, đang phát vị trí", "success");
   } catch (err) {
+    if (cancelled()) { socket?.disconnect(); return; }
+    if (err?.message === "UNAUTHORIZED") return handleUnauthorized();
     await stopBroadcast({ endTrip: false });
     showToast(START_ERRORS[err?.message] || "Không bắt đầu được chuyến, kiểm tra kết nối", "error");
   }
@@ -95,6 +151,9 @@ async function startBroadcast() {
 
 // endTrip: gửi trip:end để bản đồ gỡ xe; false khi phiên đã bị thay hoặc chưa bắt đầu được
 export async function stopBroadcast({ endTrip = true } = {}) {
+  gps.gen++; // hủy lần Bắt đầu đang chờ (nếu có)
+  clearTimeout(gps.retryTimer);
+  gps.retryTimer = null;
   if (gps.watchId != null) {
     navigator.geolocation.clearWatch(gps.watchId);
     gps.watchId = null;

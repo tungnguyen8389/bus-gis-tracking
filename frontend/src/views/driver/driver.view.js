@@ -5,7 +5,7 @@ import { showScreen } from "./features/screens.js";
 import { restoreSession, handleLogin, logout } from "./features/driver-auth.js";
 import { renderTrips, selectTrip } from "./features/trip-select.js";
 import { openDrive, closeDrive, toggleFollow } from "./features/drive-map.js";
-import { toggleTrip, stopBroadcast } from "./features/phone-gps.js";
+import { toggleTrip, stopBroadcast, onSessionExpired } from "./features/phone-gps.js";
 
 function enterTrips() {
   renderTrips();
@@ -17,6 +17,13 @@ async function leaveDrive() {
   await stopBroadcast();
   closeDrive();
 }
+
+// Token tài xế hết hạn/bị từ chối giữa chuyến (phát hiện ở phone-gps) → về màn đăng nhập
+onSessionExpired(async () => {
+  await leaveDrive();
+  logout();
+  showScreen("screenLogin");
+});
 
 registerActions({
   driverLogin: async (el, e) => {
