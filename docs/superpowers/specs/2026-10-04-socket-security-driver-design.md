@@ -72,7 +72,7 @@ ALTER TABLE vehicles
      - một lịch trình cho tuyến + chiều của cặp, `departure_time` = 05:00 + `i` × 10 phút
   6. Toàn bộ chạy trong một transaction.
 - **Giới hạn:** `count` tối đa 99 (định dạng `NN`).
-- **README:** ghi rõ phải chạy lại seed sau mỗi lần `db:import`, vì import xóa bảng `vehicles`.
+- **README:** `db:import` không đụng `users`/`vehicles` (busdata.sql chỉ nạp tuyến, trạm, lộ trình), nhưng xóa lịch trình trỏ tới tuyến không còn tồn tại. Nếu import thay đổi danh sách tuyến, chạy lại seed để tài xế có lịch trình.
 
 ## 3. Auth REST
 
