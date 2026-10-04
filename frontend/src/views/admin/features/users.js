@@ -1,6 +1,7 @@
 // Tab Quản lý Người dùng (ADMIN)
 import { state } from "../admin.state.js";
 import { openModal, closeModal } from "../../../core/modal.js";
+import { escapeHtml } from "../../../core/dom.js";
 import { apiErrorMessage } from "../../../core/http.js";
 import { listUsers, createUser, updateUser, deleteUser as removeUser } from "../../../modules/users/users.service.js";
 
@@ -10,15 +11,15 @@ export async function loadUsers() {
     const tbody = document.getElementById("users-table-body");
     tbody.innerHTML = state.users.map(u => `
         <tr>
-          <td>${u.user_id}</td>
-          <td><b>${u.username}</b></td>
-          <td>${u.full_name}</td>
-          <td>${u.email || "---"}</td>
-          <td><span class="badge ${u.role === 'ADMIN' ? 'badge-admin' : 'badge-manager'}">${u.role}</span></td>
+          <td>${escapeHtml(u.user_id)}</td>
+          <td><b>${escapeHtml(u.username)}</b></td>
+          <td>${escapeHtml(u.full_name)}</td>
+          <td>${escapeHtml(u.email || "---")}</td>
+          <td><span class="badge ${u.role === 'ADMIN' ? 'badge-admin' : 'badge-manager'}">${escapeHtml(u.role)}</span></td>
           <td>${new Date(u.created_at).toLocaleDateString("vi-VN")}</td>
           <td>
-            <button class="btn btn-sm btn-primary" data-action="editUser" data-id="${u.user_id}"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn btn-sm btn-danger" data-action="deleteUser" data-id="${u.user_id}"><i class="fa-solid fa-trash"></i></button>
+            <button class="btn btn-sm btn-primary" data-action="editUser" data-id="${escapeHtml(u.user_id)}"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-sm btn-danger" data-action="deleteUser" data-id="${escapeHtml(u.user_id)}"><i class="fa-solid fa-trash"></i></button>
           </td>
         </tr>
       `).join("");

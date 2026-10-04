@@ -1,5 +1,6 @@
 // Sidebar điều hành (ADMIN/MANAGER): chọn tuyến, chiều, tìm trạm, danh sách trạm trên tuyến
 import { state, map } from "../map.state.js";
+import { escapeHtml } from "../../../core/dom.js";
 import { goToSequential, clearRouteGraphics } from "./base-map.js";
 import { applyFleetFilter } from "./fleet-tracking.js";
 import { listRoutes } from "../../../modules/bus-routes/bus-routes.service.js";
@@ -16,9 +17,9 @@ export async function loadRoutesList(autoSelect = true) {
     const select = document.getElementById("routeSelect");
     select.innerHTML = `<option value="ALL">🌐 Hiển thị Tất cả các Tuyến</option>`;
 
-    state.allRoutes.forEach(r => {
-      select.innerHTML += `<option value="${r.route_id}">Tuyến ${r.route_number}: ${r.route_name}</option>`;
-    });
+    select.innerHTML += state.allRoutes
+      .map(r => `<option value="${escapeHtml(r.route_id)}">Tuyến ${escapeHtml(r.route_number)}: ${escapeHtml(r.route_name)}</option>`)
+      .join("");
 
     document.getElementById("routeCountBadge").innerText = `${state.allRoutes.length} tuyến`;
 
@@ -34,11 +35,21 @@ export async function loadRoutesList(autoSelect = true) {
   }
 }
 
+function syncDirectionButtons() {
+  document.getElementById("btnDir1").classList.toggle("active", state.currentDirection === 1);
+  document.getElementById("btnDir2").classList.toggle("active", state.currentDirection === 2);
+}
+
 export function setDirection(dir) {
   state.currentDirection = dir;
-  document.getElementById("btnDir1").classList.toggle("active", dir === 1);
-  document.getElementById("btnDir2").classList.toggle("active", dir === 2);
+  syncDirectionButtons();
   onRouteChanged();
+}
+
+// Vào chế độ điều hành luôn bắt đầu ở Lượt đi (khách có thể đã xem chuyến Lượt về trước khi đăng nhập)
+export function resetDirection() {
+  state.currentDirection = 1;
+  syncDirectionButtons();
 }
 
 export async function onRouteChanged() {
@@ -160,10 +171,10 @@ function renderStopsList(stops) {
     const li = document.createElement("li");
     li.className = "stop-item";
     li.innerHTML = `
-      <div class="stop-order">${order}</div>
+      <div class="stop-order">${escapeHtml(order)}</div>
       <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-        <div style="font-weight: 600; color: #1e293b;">${st.stop_name}</div>
-        <div style="font-size: 11px; color: #64748b;">${st.address || st.stop_id}</div>
+        <div style="font-weight: 600; color: #1e293b;">${escapeHtml(st.stop_name)}</div>
+        <div style="font-size: 11px; color: #64748b;">${escapeHtml(st.address || st.stop_id)}</div>
       </div>
       <i class="fa-solid fa-chevron-right" style="color: #cbd5e1; font-size: 10px;"></i>
     `;
@@ -171,8 +182,8 @@ function renderStopsList(stops) {
       if (map.view) {
         map.view.goTo({ center: [st.longitude, st.latitude], zoom: 17 }, { duration: 600 });
         map.view.openPopup({
-          title: `Trạm #${order}: ${st.stop_name}`,
-          content: `<b>Mã trạm:</b> ${st.stop_id}<br><b>Địa chỉ:</b> ${st.address || "---"}`,
+          title: `Trạm #${escapeHtml(order)}: ${escapeHtml(st.stop_name)}`,
+          content: `<b>Mã trạm:</b> ${escapeHtml(st.stop_id)}<br><b>Địa chỉ:</b> ${escapeHtml(st.address || "---")}`,
           location: { type: "point", longitude: st.longitude, latitude: st.latitude }
         });
       }

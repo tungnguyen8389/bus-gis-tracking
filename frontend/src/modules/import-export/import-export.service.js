@@ -1,4 +1,4 @@
-import { request, apiUrl } from "../../core/http.js";
+import { request, requestBlob } from "../../core/http.js";
 
 /**
  * Nạp dữ liệu JSON vào CSDL.
@@ -9,9 +9,15 @@ export function importJson(payload) {
   return request("/import/json", { method: "POST", body: payload, auth: true });
 }
 
-// URL tải file sao lưu JSON (type: all | routes | stops | paths | vehicles)
-export function exportJsonUrl(type) {
-  return apiUrl(`/export/json?type=${type}`);
+/**
+ * Tải file sao lưu JSON (API yêu cầu đăng nhập nên không mở thẳng URL được).
+ * @param {"all"|"routes"|"stops"|"paths"|"vehicles"} type
+ * @returns {Promise<{blob: Blob, filename: string}>}
+ */
+export async function exportJson(type) {
+  const blob = await requestBlob(`/export/json?type=${type}`, { auth: true });
+  // Header Content-Disposition không đọc được qua CORS → tự đặt tên theo đúng mẫu của server
+  return { blob, filename: `bus_gis_export_${type}_${Date.now()}.json` };
 }
 
 /**

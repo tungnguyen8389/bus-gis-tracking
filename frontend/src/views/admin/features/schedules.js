@@ -3,6 +3,7 @@
 // --------------------------------------------------------------------
 import { state } from "../admin.state.js";
 import { openModal, closeModal } from "../../../core/modal.js";
+import { escapeHtml } from "../../../core/dom.js";
 import { ApiError } from "../../../core/http.js";
 import { loadDashboardStats } from "./dashboard.js";
 import { ensureRoutesLoaded, routeOptionsHtml } from "./routes.js";
@@ -21,7 +22,7 @@ export async function loadScheduleFilterDropdowns() {
     const vehSelect = document.getElementById("schedule_filter_vehicle");
     const curVeh = vehSelect.value;
     vehSelect.innerHTML = `<option value="ALL">Tất cả xe buýt</option>` +
-      state.vehicles.map(v => `<option value="${v.vehicle_id}">${v.plate_number} (${v.vehicle_id})</option>`).join("");
+      state.vehicles.map(v => `<option value="${escapeHtml(v.vehicle_id)}">${escapeHtml(v.plate_number)} (${escapeHtml(v.vehicle_id)})</option>`).join("");
     if (curVeh) vehSelect.value = curVeh;
   } catch (e) {}
 }
@@ -49,29 +50,29 @@ export async function loadSchedules() {
 
       const vehStatus = s.vehicle_status === "ACTIVE"
         ? `<span class="badge badge-active">${s.vehicle_status}</span>`
-        : `<span class="badge badge-inactive">${s.vehicle_status || 'UNKNOWN'}</span>`;
+        : `<span class="badge badge-inactive">${escapeHtml(s.vehicle_status || 'UNKNOWN')}</span>`;
 
       // Format departure time HH:mm
       const timeFormatted = s.departure_time ? s.departure_time.substring(0, 5) : "---";
 
       return `
         <tr>
-          <td><b>#SCH_${s.schedule_id}</b></td>
-          <td><span style="font-size: 15px; font-weight: 700; color: #0284c7;"><i class="fa-regular fa-clock"></i> ${timeFormatted}</span></td>
-          <td><span class="badge badge-manager">Tuyến ${s.route_number}</span> <b>${s.route_name}</b></td>
+          <td><b>#SCH_${escapeHtml(s.schedule_id)}</b></td>
+          <td><span style="font-size: 15px; font-weight: 700; color: #0284c7;"><i class="fa-regular fa-clock"></i> ${escapeHtml(timeFormatted)}</span></td>
+          <td><span class="badge badge-manager">Tuyến ${escapeHtml(s.route_number)}</span> <b>${escapeHtml(s.route_name)}</b></td>
           <td>${dirLabel}</td>
-          <td><span style="font-weight: 600; color: #1e293b;">${s.plate_number}</span> <small style="color: #64748b;">(${s.vehicle_id})</small></td>
-          <td>${s.driver_name || "---"}</td>
+          <td><span style="font-weight: 600; color: #1e293b;">${escapeHtml(s.plate_number)}</span> <small style="color: #64748b;">(${escapeHtml(s.vehicle_id)})</small></td>
+          <td>${escapeHtml(s.driver_name || "---")}</td>
           <td>${vehStatus}</td>
           <td>
-            <button class="btn btn-sm btn-primary" data-action="editSchedule" data-id="${s.schedule_id}" title="Sửa chuyến"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn btn-sm btn-danger" data-action="deleteSchedule" data-id="${s.schedule_id}" title="Hủy phân công"><i class="fa-solid fa-trash"></i></button>
+            <button class="btn btn-sm btn-primary" data-action="editSchedule" data-id="${escapeHtml(s.schedule_id)}" title="Sửa chuyến"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-sm btn-danger" data-action="deleteSchedule" data-id="${escapeHtml(s.schedule_id)}" title="Hủy phân công"><i class="fa-solid fa-trash"></i></button>
           </td>
         </tr>
       `;
     }).join("");
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;">Lỗi tải dữ liệu: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;">Lỗi tải dữ liệu: ${escapeHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -84,7 +85,7 @@ async function populateModalScheduleDropdowns(selectedRouteId = null, selectedVe
   await ensureVehiclesLoaded();
   const vehSelect = document.getElementById("modal_schedule_vehicle_id");
   vehSelect.innerHTML = state.vehicles
-    .map(v => `<option value="${v.vehicle_id}">${v.plate_number} - Tài xế: ${v.driver_name || 'Chưa gán'} (${v.status})</option>`)
+    .map(v => `<option value="${escapeHtml(v.vehicle_id)}">${escapeHtml(v.plate_number)} - Tài xế: ${escapeHtml(v.driver_name || 'Chưa gán')} (${escapeHtml(v.status)})</option>`)
     .join("");
   if (selectedVehicleId) vehSelect.value = selectedVehicleId;
 }

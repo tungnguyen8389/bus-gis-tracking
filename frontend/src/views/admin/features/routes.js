@@ -1,6 +1,7 @@
 // Tab Quản lý Tuyến xe
 import { state } from "../admin.state.js";
 import { openModal, closeModal } from "../../../core/modal.js";
+import { escapeHtml } from "../../../core/dom.js";
 import { apiErrorMessage, ignoreApiError } from "../../../core/http.js";
 import { listRoutes, createRoute, updateRoute, deleteRoute as removeRoute } from "../../../modules/bus-routes/bus-routes.service.js";
 
@@ -12,7 +13,7 @@ export async function ensureRoutesLoaded() {
 
 // <option> cho dropdown chọn tuyến
 export function routeOptionsHtml() {
-  return state.routes.map(r => `<option value="${r.route_id}">Tuyến ${r.route_number}: ${r.route_name}</option>`).join("");
+  return state.routes.map(r => `<option value="${escapeHtml(r.route_id)}">Tuyến ${escapeHtml(r.route_number)}: ${escapeHtml(r.route_name)}</option>`).join("");
 }
 
 export async function loadRoutes() {
@@ -21,16 +22,16 @@ export async function loadRoutes() {
     const tbody = document.getElementById("routes-table-body");
     tbody.innerHTML = state.routes.map(r => `
         <tr>
-          <td><b>${r.route_id}</b></td>
-          <td><span class="badge badge-manager">Tuyến ${r.route_number}</span></td>
-          <td>${r.route_name}</td>
-          <td>${r.distance_km} km</td>
-          <td>${r.headway_min} ph</td>
-          <td>${r.total_stops} trạm</td>
+          <td><b>${escapeHtml(r.route_id)}</b></td>
+          <td><span class="badge badge-manager">Tuyến ${escapeHtml(r.route_number)}</span></td>
+          <td>${escapeHtml(r.route_name)}</td>
+          <td>${escapeHtml(r.distance_km)} km</td>
+          <td>${escapeHtml(r.headway_min)} ph</td>
+          <td>${escapeHtml(r.total_stops)} trạm</td>
           <td>${r.total_paths > 0 ? '<span class="badge badge-active">Đã có lộ trình</span>' : '<span class="badge badge-inactive">Chưa vẽ lộ trình</span>'}</td>
           <td>
-            <button class="btn btn-sm btn-primary" data-action="editRoute" data-id="${r.route_id}"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn btn-sm btn-danger" data-action="deleteRoute" data-id="${r.route_id}"><i class="fa-solid fa-trash"></i></button>
+            <button class="btn btn-sm btn-primary" data-action="editRoute" data-id="${escapeHtml(r.route_id)}"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-sm btn-danger" data-action="deleteRoute" data-id="${escapeHtml(r.route_id)}"><i class="fa-solid fa-trash"></i></button>
           </td>
         </tr>
       `).join("");

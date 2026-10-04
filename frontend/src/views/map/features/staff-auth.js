@@ -9,7 +9,7 @@ import { getToken, setToken, clearToken } from "../../../core/session.js";
 import { ApiError } from "../../../core/http.js";
 import { clearRouteGraphics } from "./base-map.js";
 import { applyFleetFilter } from "./fleet-tracking.js";
-import { loadRoutesList } from "./route-browser.js";
+import { loadRoutesList, resetDirection } from "./route-browser.js";
 import { loadStopIndex, hasStopIndex, clearTripLayer } from "./trip-finder/trip-finder.js";
 import { isStaffRole, login, getCurrentUser } from "../../../modules/auth/auth.service.js";
 
@@ -38,6 +38,7 @@ function applyAuthState(user) {
 
   clearTripLayer();
   if (isStaff) {
+    resetDirection();
     loadRoutesList();
   } else {
     // Trả bản đồ về trạng thái khách: chưa chọn tuyến, hiện mọi xe

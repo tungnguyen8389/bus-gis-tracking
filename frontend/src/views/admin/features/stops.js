@@ -3,6 +3,7 @@
 // --------------------------------------------------------------------
 import { state } from "../admin.state.js";
 import { openModal, closeModal } from "../../../core/modal.js";
+import { escapeHtml } from "../../../core/dom.js";
 import { apiErrorMessage, ignoreApiError } from "../../../core/http.js";
 import { ensureRoutesLoaded, routeOptionsHtml } from "./routes.js";
 import {
@@ -61,14 +62,14 @@ export async function loadStops() {
         const coords = f.geometry.coordinates;
         return `
           <tr>
-            <td><b>${p.stop_id}</b></td>
-            <td>${p.stop_name}</td>
-            <td>${p.address || "---"}</td>
+            <td><b>${escapeHtml(p.stop_id)}</b></td>
+            <td>${escapeHtml(p.stop_name)}</td>
+            <td>${escapeHtml(p.address || "---")}</td>
             <td>${coords[0].toFixed(6)}</td>
             <td>${coords[1].toFixed(6)}</td>
             <td>
-              <button class="btn btn-sm btn-primary" data-action="editStop" data-id="${p.stop_id}"><i class="fa-solid fa-pen"></i></button>
-              <button class="btn btn-sm btn-danger" data-action="deleteStop" data-id="${p.stop_id}"><i class="fa-solid fa-trash"></i></button>
+              <button class="btn btn-sm btn-primary" data-action="editStop" data-id="${escapeHtml(p.stop_id)}"><i class="fa-solid fa-pen"></i></button>
+              <button class="btn btn-sm btn-danger" data-action="deleteStop" data-id="${escapeHtml(p.stop_id)}"><i class="fa-solid fa-trash"></i></button>
             </td>
           </tr>
         `;
@@ -92,13 +93,13 @@ export async function loadStops() {
 
       tbody.innerHTML = stops.map(st => `
           <tr>
-            <td><span class="badge-order">${st.stop_order}</span></td>
-            <td><b>${st.stop_id}</b></td>
-            <td style="font-weight: 600; color: #0079c1;">${st.stop_name}</td>
-            <td>${st.address || "---"}</td>
+            <td><span class="badge-order">${escapeHtml(st.stop_order)}</span></td>
+            <td><b>${escapeHtml(st.stop_id)}</b></td>
+            <td style="font-weight: 600; color: #0079c1;">${escapeHtml(st.stop_name)}</td>
+            <td>${escapeHtml(st.address || "---")}</td>
             <td>[${st.longitude.toFixed(4)}, ${st.latitude.toFixed(4)}]</td>
             <td>
-              <button class="btn btn-sm btn-danger" data-action="removeStopFromRoute" data-route="${st.route_id}" data-stop="${st.stop_id}" data-dir="${direction}" data-order="${st.stop_order}" title="Xóa khỏi tuyến này">
+              <button class="btn btn-sm btn-danger" data-action="removeStopFromRoute" data-route="${escapeHtml(st.route_id)}" data-stop="${escapeHtml(st.stop_id)}" data-dir="${escapeHtml(direction)}" data-order="${escapeHtml(st.stop_order)}" title="Xóa khỏi tuyến này">
                 <i class="fa-solid fa-unlink"></i> Bỏ gán
               </button>
             </td>
@@ -175,7 +176,7 @@ export async function openAssignStopModal() {
 
   const stopSelect = document.getElementById("assign_stop_id");
   stopSelect.innerHTML = state.allStops
-    .map(f => `<option value="${f.properties.stop_id}">${f.properties.stop_id} - ${f.properties.stop_name}</option>`)
+    .map(f => `<option value="${escapeHtml(f.properties.stop_id)}">${escapeHtml(f.properties.stop_id)} - ${escapeHtml(f.properties.stop_name)}</option>`)
     .join("");
 
   // Nạp danh sách tuyến

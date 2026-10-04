@@ -3,10 +3,11 @@
 // --------------------------------------------------------------------
 import { state, preview } from "../admin.state.js";
 import { loadArcgisModules } from "../../../core/arcgis.js";
-import { ApiError } from "../../../core/http.js";
+import { ApiError, apiErrorMessage } from "../../../core/http.js";
+import { escapeHtml } from "../../../core/dom.js";
 import { loadDashboardStats } from "./dashboard.js";
 import { ensureRoutesLoaded, routeOptionsHtml } from "./routes.js";
-import { importJson, exportJsonUrl, detectImportType } from "../../../modules/import-export/import-export.service.js";
+import { importJson, exportJson, detectImportType } from "../../../modules/import-export/import-export.service.js";
 
 // Khởi tạo ArcGIS Preview Map
 export async function initPreviewMap() {
@@ -28,10 +29,9 @@ export async function initPreviewMap() {
   previewMap.add(preview.layer);
 }
 
-// Gọi khi mở tab: bản đồ nằm trong tab ẩn nên cần resize lại
+// Gọi khi mở tab (MapView tự cập nhật kích thước khi tab hiện ra, không cần resize thủ công)
 export function onJsonHubShown() {
   loadRoutesForImport();
-  setTimeout(() => preview.view && preview.view.container && preview.view.resize(), 200);
 }
 
 async function loadRoutesForImport() {
@@ -165,8 +165,8 @@ export function previewJsonOnMap() {
               outline: { color: [255, 255, 255], width: 2 }
             },
             popupTemplate: {
-              title: `[#${stt}] ${name}`,
-              content: `<div style="font-size: 13px;"><b>Tọa độ:</b> ${lat.toFixed(6)}, ${lon.toFixed(6)}<br><b>Tuyến:</b> ${data.routeName || "Chưa đặt tên"}</div>`
+              title: `[#${escapeHtml(stt)}] ${escapeHtml(name)}`,
+              content: `<div style="font-size: 13px;"><b>Tọa độ:</b> ${lat.toFixed(6)}, ${lon.toFixed(6)}<br><b>Tuyến:</b> ${escapeHtml(data.routeName || "Chưa đặt tên")}</div>`
             }
           });
           preview.layer.add(pointGraphic);
@@ -207,7 +207,7 @@ export function previewJsonOnMap() {
           const pointGraphic = new Graphic({
             geometry: { type: "point", longitude: lon, latitude: lat },
             symbol: { type: "simple-marker", color: [0, 150, 136], size: "11px", outline: { color: [255, 255, 255], width: 1.5 } },
-            popupTemplate: { title: `[#${stt}] ${name}`, content: `Kinh độ: ${lon}, Vĩ độ: ${lat}` }
+            popupTemplate: { title: `[#${escapeHtml(stt)}] ${escapeHtml(name)}`, content: `Kinh độ: ${escapeHtml(lon)}, Vĩ độ: ${escapeHtml(lat)}` }
           });
           preview.layer.add(pointGraphic);
         }
@@ -217,10 +217,10 @@ export function previewJsonOnMap() {
       }
       infoEl.innerHTML = `<span style="color: #16a34a; font-weight: 600;">✓ Đã hiển thị <b>${list.length}</b> trạm dừng trên bản đồ.</span>`;
     } else {
-      infoEl.innerHTML = `<span style="color: #0284c7; font-weight: 600;">✓ Cấu trúc JSON '${type}' hợp lệ. Sẵn sàng lưu vào CSDL.</span>`;
+      infoEl.innerHTML = `<span style="color: #0284c7; font-weight: 600;">✓ Cấu trúc JSON '${escapeHtml(type)}' hợp lệ. Sẵn sàng lưu vào CSDL.</span>`;
     }
   } catch (err) {
-    infoEl.innerHTML = `<span style="color: #dc2626; font-weight: 600;">✗ Lỗi cú pháp JSON: ${err.message}</span>`;
+    infoEl.innerHTML = `<span style="color: #dc2626; font-weight: 600;">✗ Lỗi cú pháp JSON: ${escapeHtml(err.message)}</span>`;
     alert("Lỗi cú pháp JSON: " + err.message);
   }
 }
@@ -258,6 +258,19 @@ export async function submitImportJson() {
   }
 }
 
-export function exportData(type) {
-  window.open(exportJsonUrl(type), "_blank");
+export async function exportData(type) {
+  try {
+    const { blob, filename } = await exportJson(type);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    if (err instanceof ApiError) alert("❌ Lỗi xuất dữ liệu: " + apiErrorMessage(err, "Không thể xuất JSON"));
+    else alert("❌ Lỗi kết nối máy chủ: " + err.message);
+  }
 }

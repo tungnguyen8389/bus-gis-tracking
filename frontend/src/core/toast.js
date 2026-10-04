@@ -11,7 +11,9 @@ export function showToast(message, type = "info") {
   if (type === "error") icon = "fa-triangle-exclamation";
   if (type === "warning") icon = "fa-circle-exclamation";
 
-  toast.innerHTML = `<i class="fa-solid ${icon}"></i><span>${message}</span>`;
+  // Nội dung là văn bản thuần (có thể chứa tên người dùng, biển số...) → không chèn HTML
+  toast.innerHTML = `<i class="fa-solid ${icon}"></i><span></span>`;
+  toast.querySelector("span").textContent = message;
   container.appendChild(toast);
 
   setTimeout(() => {

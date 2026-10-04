@@ -31,7 +31,18 @@ export function apiUrl(path) {
  * @param {string} path   Đường dẫn sau /api/v1 (VD: "/routes")
  * @param {object} opts   { method, body, auth } — auth: gửi kèm Bearer token
  */
-export async function request(path, { method = "GET", body, auth = false } = {}) {
+export async function request(path, opts = {}) {
+  const res = await send(path, opts);
+  return res.json().catch(() => null);
+}
+
+// Như request() nhưng trả nội dung dạng Blob (tải file, VD: sao lưu JSON cần token)
+export async function requestBlob(path, opts = {}) {
+  const res = await send(path, opts);
+  return res.blob();
+}
+
+async function send(path, { method = "GET", body, auth = false } = {}) {
   const headers = {};
   if (auth) {
     headers["Content-Type"] = "application/json";
@@ -44,7 +55,6 @@ export async function request(path, { method = "GET", body, auth = false } = {})
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined
   });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(res.status, data);
-  return data;
+  if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+  return res;
 }

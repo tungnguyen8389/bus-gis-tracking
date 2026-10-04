@@ -34,6 +34,8 @@ export function switchTab(tabId) {
 
   const targetPane = document.getElementById(`tab-${tabId}`);
   if (targetPane) targetPane.classList.add("active");
+  const navItem = document.querySelector(`.nav-item[data-arg="${tabId}"]`);
+  if (navItem) navItem.classList.add("active");
 
   document.getElementById("page-title").innerText = TAB_TITLES[tabId] || "Quản trị";
 
