@@ -82,7 +82,7 @@ class VirtualDriver {
     this.socket = io(`${this.apiUrl}/device`, { auth: { token: this.token }, reconnectionDelay: 2000 });
     // Mỗi lần (re)connect là socket mới trên server → phải gửi lại trip:start
     this.socket.on("connect", () => this.beginTrip());
-    this.socket.on("disconnect", () => { this.trip = null; });
+    this.socket.on("disconnect", () => { this.trip = null; clearTimeout(this.retryTimer); });
     this.socket.on("connect_error", err => this.onConnectError(err));
     this.socket.on("session:replaced", () => {
       this.log(`${this.username}: bị thay bởi thiết bị khác → dừng xe ${this.plate}`);
@@ -91,22 +91,45 @@ class VirtualDriver {
   }
 
   async beginTrip() {
+    if (this.stopped) return;
+    clearTimeout(this.retryTimer);
     try {
       const ack = await this.socket.timeout(5000).emitWithAck("trip:start", { schedule_id: this.schedule.schedule_id });
-      if (!ack.ok) return this.fail(`trip:start bị từ chối (${ack.error})`);
+      if (this.stopped) return;
+      if (!ack.ok) {
+        // SERVER_ERROR là lỗi tạm thời (DB / backend khởi động lại) → thử lại; mã khác (SCHEDULE_NOT_ALLOWED) là vĩnh viễn
+        if (ack.error !== "SERVER_ERROR") return this.fail(`trip:start bị từ chối (${ack.error})`);
+        this.log(`${this.username}: trip:start lỗi tạm thời (${ack.error}) → thử lại sau ${RETRY_MS / 1000}s`);
+        return this.retryTrip();
+      }
       this.trip = ack.trip;
       this.relogged = false;
       this.log(`${this.username}: xe ${this.plate} chạy Tuyến ${ack.trip.route_number} chiều ${ack.trip.direction}`);
       if (!this.timer) this.timer = setInterval(() => this.tick(), TICK_MS);
     } catch (err) {
-      this.log(`${this.username}: trip:start không phản hồi (${err.message})`);
+      if (this.stopped) return;
+      this.log(`${this.username}: trip:start không phản hồi (${err.message}) → thử lại sau ${RETRY_MS / 1000}s`);
+      this.retryTrip();
     }
+  }
+
+  // Hẹn gửi lại trip:start; nếu socket đã rớt thì bỏ qua (lần connect sau tự gọi beginTrip)
+  retryTrip() {
+    this.retryTimer = setTimeout(() => {
+      if (!this.stopped && this.socket?.connected) this.beginTrip();
+    }, RETRY_MS);
   }
 
   async onConnectError(err) {
     if (this.stopped) return;
     // Lỗi tầng mạng: socket.io tự kết nối lại (socket.active = true)
     if (this.socket.active) return this.log(`${this.username}: mất kết nối socket (${err.message}), đang thử lại`);
+    if (err.message === "SERVER_ERROR") {
+      // Lỗi tạm thời phía server → kết nối lại sau RETRY_MS
+      this.log(`${this.username}: server lỗi tạm thời (${err.message}) → thử lại sau ${RETRY_MS / 1000}s`);
+      this.retryTimer = setTimeout(() => { if (!this.stopped) this.socket.connect(); }, RETRY_MS);
+      return;
+    }
     if (err.message !== "UNAUTHORIZED") return this.fail(`socket bị từ chối (${err.message})`);
     if (this.relogged) return this.fail("token vẫn bị từ chối sau khi đăng nhập lại");
 
@@ -138,6 +161,7 @@ class VirtualDriver {
   stop(endTrip = true) {
     this.stopped = true;
     clearInterval(this.timer);
+    clearTimeout(this.retryTimer);
     this.timer = null;
     const socket = this.socket;
     if (!socket) return Promise.resolve();
