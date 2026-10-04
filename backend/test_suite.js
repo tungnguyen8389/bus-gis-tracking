@@ -494,6 +494,7 @@ async function runTestSuite() {
   const frontendFiles = [
     { path: path.join(__dirname, "../frontend/index.html"), name: "Màn hình Bản đồ Giám sát 2D (frontend/index.html)" },
     { path: path.join(__dirname, "../frontend/admin.html"), name: "Cổng Quản trị Admin Portal (frontend/admin.html)" },
+    { path: path.join(__dirname, "../frontend/driver.html"), name: "Trang Tài xế (frontend/driver.html)" },
     { path: path.join(__dirname, "../tools/get_coords_1.html"), name: "Bộ trích xuất lộ trình & trạm (tools/get_coords_1.html)" }
   ];
 

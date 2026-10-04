@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>Tài Xế – Web GIS Xe Buýt</title>
+
+  <!-- 1. Socket.io trước ArcGIS để window.io không xung đột AMD loader -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <!-- 2. ArcGIS Maps SDK for JavaScript 4.29 -->
+  <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/4.29/"></script>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="assets/css/driver.css" />
+</head>
+<body>
+  <div id="toastContainer"></div>
+
+  <!-- 3 màn: Đăng nhập → Chọn chuyến → Chạy xe (nạp từ src/views/driver/sections/*.html) -->
+  <div data-section="login"></div>
+  <div data-section="trip-select"></div>
+  <div data-section="drive-panel"></div>
+
+  <script type="module" src="src/views/driver/driver.view.js"></script>
+</body>
+</html>

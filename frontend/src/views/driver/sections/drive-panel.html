@@ -1,0 +1,36 @@
+<section id="screenDrive" class="screen screen-drive" hidden>
+  <div id="driveMap"></div>
+
+  <div class="drive-topbar">
+    <button type="button" class="btn btn-round" data-action="changeTrip" title="Đổi chuyến">
+      <i class="fa-solid fa-arrow-left"></i>
+    </button>
+    <span id="connBadge" class="badge badge-off">OFFLINE</span>
+    <span id="gpsSourceBadge" class="badge badge-idle">Chưa có tín hiệu</span>
+    <button type="button" id="btnFollow" class="btn btn-round active" data-action="toggleFollow" title="Bám theo xe">
+      <i class="fa-solid fa-location-crosshairs"></i>
+    </button>
+  </div>
+
+  <div id="replacedBanner" class="banner" hidden>
+    <i class="fa-solid fa-triangle-exclamation"></i> Xe đang được điều khiển từ thiết bị khác
+  </div>
+
+  <div class="drive-panel">
+    <div class="drive-route"><span id="tripRoute"></span> · <span id="tripDirection"></span></div>
+    <div class="drive-stats">
+      <div class="stat">
+        <div class="stat-value" id="driveSpeed">0</div>
+        <div class="stat-label">km/h</div>
+      </div>
+      <div class="stat stat-wide">
+        <div class="stat-label">Trạm kế tiếp</div>
+        <div class="stat-text" id="nextStopName">—</div>
+        <div class="stat-label" id="nextStopDistance"></div>
+      </div>
+    </div>
+    <button type="button" id="btnTripToggle" class="btn btn-primary btn-block btn-lg" data-action="toggleTrip">
+      <i class="fa-solid fa-play"></i> Bắt đầu chuyến
+    </button>
+  </div>
+</section>
