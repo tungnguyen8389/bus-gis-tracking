@@ -176,9 +176,9 @@ backend/src/sockets/
    `io.of("/").emit("fleet_location_update", packet)`. Định dạng giữ nguyên như hiện tại, nên phần xử lý gói vị trí trong `fleet-tracking.js` không đổi (chỉ thêm xử lý `vehicle_offline`, xem 4.7).
 5. Gọi `trackingLog.record(packet)`.
 
-**`trip:end` (có ack)** → `socket.data.trip = null`, phát `vehicle_offline {vehicle_id}` tới `/`, ack `{ok:true}`.
+**`trip:end` (có ack)** → nếu socket đang có trip **hoặc** xe đang hiện trên bản đồ (server giữ tập `onMap`: thêm khi phát vị trí, bỏ khi phát offline): `socket.data.trip = null` và phát `vehicle_offline {vehicle_id}` tới `/`. Luôn ack `{ok:true}`.
 
-**`disconnect`** → nếu socket này vẫn là phiên hiện hành của xe trong `activeDevices`: xóa khỏi map, và nếu đang có trip thì phát `vehicle_offline`.
+**`disconnect`** → nếu socket này vẫn là phiên hiện hành của xe trong `activeDevices`: xóa khỏi map, và nếu đang có trip hoặc xe đang hiện trên bản đồ (`onMap`) thì phát `vehicle_offline`. Nhờ vậy phiên thay thế ngắt trước khi `trip:start` thành công vẫn gỡ được xe mà phiên cũ (im lặng khi bị thay) đã đưa lên bản đồ. Xe chưa từng hiện trên bản đồ thì không phát offline.
 
 ### 4.6 Ghi log (`tracking-log.js`)
 

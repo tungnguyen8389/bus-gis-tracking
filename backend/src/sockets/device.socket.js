@@ -11,6 +11,16 @@ const WARN_INTERVAL_MS = 10000;
 function registerDeviceSocket(io, { db, jwtSecret, broadcaster, trackingLog, now = Date.now }) {
   const devices = io.of("/device");
   const activeDevices = new Map(); // vehicle_id → socket đang giữ xe (mỗi xe 1 phiên)
+  const onMap = new Set();         // vehicle_id đang hiện trên bản đồ công khai (đã phát vị trí, chưa phát offline)
+
+  const publishLocation = packet => {
+    onMap.add(packet.vehicle_id);
+    broadcaster.publishLocation(packet);
+  };
+  const publishOffline = vehicleId => {
+    onMap.delete(vehicleId);
+    broadcaster.publishOffline(vehicleId);
+  };
 
   devices.use(createDeviceAuth({ db, jwtSecret }));
 
@@ -78,15 +88,16 @@ function registerDeviceSocket(io, { db, jwtSecret, broadcaster, trackingLog, now
         ...result.value,
         timestamp: new Date(t).toISOString()
       };
-      broadcaster.publishLocation(packet);
+      publishLocation(packet);
       trackingLog.record(packet);
     });
 
     socket.on("trip:end", (...args) => {
       const ack = args.find(a => typeof a === "function") || (() => {});
-      if (socket.data.trip) {
+      // Phiên thay thế có thể chưa có trip nhưng xe vẫn đang hiện trên bản đồ
+      if (socket.data.trip || onMap.has(vehicle.vehicle_id)) {
         socket.data.trip = null;
-        broadcaster.publishOffline(vehicle.vehicle_id);
+        publishOffline(vehicle.vehicle_id);
       }
       ack({ ok: true });
     });
@@ -95,7 +106,7 @@ function registerDeviceSocket(io, { db, jwtSecret, broadcaster, trackingLog, now
       // Phiên đã bị thay thì xe vẫn đang chạy ở phiên mới → không báo offline
       if (activeDevices.get(vehicle.vehicle_id) !== socket) return;
       activeDevices.delete(vehicle.vehicle_id);
-      if (socket.data.trip) broadcaster.publishOffline(vehicle.vehicle_id);
+      if (socket.data.trip || onMap.has(vehicle.vehicle_id)) publishOffline(vehicle.vehicle_id);
     });
   });
 }

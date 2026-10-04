@@ -115,8 +115,7 @@ Số liệu DB thật lúc rà soát: `vehicles` = 0, `schedules` = 0, `route_pa
 - **Vấn đề:** Xe ngừng phát vẫn đứng im mãi trên bản đồ. `busGraphics`, `busAnimStates`, `busCurrentPositions` phình không giới hạn, vì simulator reload mỗi 30 giây và đổi ID.
 - **Hướng sửa:**
   - [ ] Server quét định kỳ: xe im quá 30 giây thì emit `vehicle_offline { vehicle_id }` và xóa khỏi bộ nhớ.
-  - [ ] Client nhận `vehicle_offline` thì gỡ graphic và xóa cả 3 cache.
-  - [x] Phát vehicle_offline khi trip:end / thiết bị ngắt kết nối; client gỡ graphic và cache (quét timeout vẫn để nhóm B)
+  - [x] Server phát `vehicle_offline` khi `trip:end` hoặc phiên hiện hành ngắt kết nối, miễn là xe đang hiện trên bản đồ (đã phát vị trí, kể cả phiên thay thế chưa `trip:start`); client nhận thì gỡ graphic và xóa cả 3 cache (quét timeout vẫn để nhóm B)
 - **Kiểm chứng:** Tắt simulator, sau khoảng 30 giây xe biến khỏi bản đồ.
 
 ---

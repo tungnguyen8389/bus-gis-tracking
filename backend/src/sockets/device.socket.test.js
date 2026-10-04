@@ -158,3 +158,44 @@ test("ngắt kết nối khi đang có trip → phát vehicle_offline", async t 
   await tick();
   assert.deepEqual(srv.published.offline, ["DRV_01"]);
 });
+
+test("phiên mới thay phiên cũ rồi ngắt khi chưa trip:start → vẫn gỡ xe khỏi bản đồ đúng 1 lần", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const a = srv.connect(driverToken(1)); await waitConnect(a);
+  await startTrip(a, 11);
+  a.emit("gps_ping", { latitude: 10.8, longitude: 106.7 });
+  await tick();
+  assert.equal(srv.published.locations.length, 1);
+
+  const replaced = new Promise(r => a.once("session:replaced", r));
+  const b = srv.connect(driverToken(1)); await waitConnect(b);
+  await replaced;
+  await tick();
+  assert.deepEqual(srv.published.offline, []);
+
+  b.disconnect();
+  await tick();
+  assert.deepEqual(srv.published.offline, ["DRV_01"]);
+});
+
+test("phiên thay thế gọi trip:end khi chưa trip:start → gỡ xe khỏi bản đồ, ngắt sau đó không phát lại", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const a = srv.connect(driverToken(1)); await waitConnect(a);
+  await startTrip(a, 11);
+  a.emit("gps_ping", { latitude: 10.8, longitude: 106.7 });
+  await tick();
+  const b = srv.connect(driverToken(1)); await waitConnect(b);
+  await tick();
+  assert.deepEqual(await b.timeout(2000).emitWithAck("trip:end", {}), { ok: true });
+  b.disconnect();
+  await tick();
+  assert.deepEqual(srv.published.offline, ["DRV_01"]);
+});
+
+test("kết nối rồi ngắt mà chưa từng phát vị trí → không phát vehicle_offline", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const s = srv.connect(driverToken(1)); await waitConnect(s);
+  s.disconnect();
+  await tick();
+  assert.deepEqual(srv.published.offline, []);
+});
