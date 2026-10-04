@@ -28,8 +28,19 @@ Bus_project/
 ├── docs/
 │   └── NODEJS_VS_LARAVEL_ANALYSIS.md # Phân tích so sánh công nghệ Backend (Node.js vs Laravel)
 ├── frontend/
-│   ├── index.html                  # Giao diện bản đồ giám sát 2D Realtime (ArcGIS JS SDK v4.29)
-│   └── admin.html                  # Trang Quản trị Admin Portal (Auth, CRUD & JSON Importer)
+│   ├── index.html                  # Shell bản đồ giám sát 2D Realtime (ArcGIS JS SDK v4.29)
+│   ├── admin.html                  # Shell trang Quản trị Admin Portal (Auth, CRUD & JSON Importer)
+│   ├── assets/css/                 # map.css, admin.css
+│   └── src/                        # ES modules, không cần build (phải mở qua HTTP, không chạy file://)
+│       ├── core/                   # config (API_BASE), http (request + ApiError), session (token), actions (data-action), dom, toast, modal, arcgis
+│       ├── modules/<tên>/<tên>.service.js # Gọi API & xử lý response theo module backend:
+│       │                           #   auth, users, bus-routes, paths, stops, trip-plan, vehicles, schedules,
+│       │                           #   admin-stats, import-export, realtime (Socket.io)
+│       └── views/
+│           ├── map/                # map.view.js (entry), map.state.js, sections/*.html,
+│           │                       #   features/: base-map, staff-auth, route-browser, fleet-tracking, geolocation, trip-finder/
+│           └── admin/              # admin.view.js (entry), admin.state.js, sections/{tabs,modals}/*.html,
+│                                   #   features/: auth, navigation, dashboard, routes, stops, vehicles, schedules, json-hub, users
 ├── tools/
 │   ├── get_coords_1.html           # Công cụ trích xuất dữ liệu lộ trình & trạm nâng cao
 │   └── google_maps_importer.html   # Công cụ import & đảo tọa độ Google Maps

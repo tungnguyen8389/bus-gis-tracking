@@ -1,0 +1,54 @@
+<!-- BẢNG ĐIỀU KHIỂN NỔI BÊN PHẢI: THÔNG TIN XE ĐANG CHỌN, VẬN TỐC, TRẠM TIẾP THEO -->
+<div id="fleetDashboard">
+  <h4><i class="fa-solid fa-satellite-dish" style="color: #28a745;"></i> Theo dõi xe</h4>
+  <div class="info-row">
+    <b>Tuyến đang chạy:</b> 
+    <span id="busRouteName" style="font-weight: 600; color: #0079c1;">Tuyến 08</span>
+  </div>
+  <div class="info-row">
+    <b>Biển số xe:</b> 
+    <span id="busPlate" style="font-weight: 700; color: #0f172a;">51B-123.45</span>
+  </div>
+  <div class="info-row">
+    <b>Tốc độ chạy:</b> 
+    <span><span id="busSpeed" style="font-weight: 700; color: #d97706; font-size: 14px;">32</span> km/h</span>
+  </div>
+  <div class="info-row">
+    <b>Tọa độ GPS:</b> 
+    <span id="busCoord" style="font-family: monospace; font-size: 11.5px;">[106.8000, 10.8700]</span>
+  </div>
+
+  <!-- Trạm tiếp theo sắp tới -->
+  <div class="next-stop-highlight">
+    <div style="font-size: 11px; color: #1e40af; font-weight: bold; margin-bottom: 2px;">
+      <i class="fa-solid fa-forward-step"></i> TRẠM TIẾP THEO SẮP TỚI:
+    </div>
+    <div id="nextStopName" style="font-weight: 700; color: #0369a1; font-size: 12.5px;">
+      Trạm ĐH Khoa học Tự nhiên
+    </div>
+  </div>
+
+  <div class="info-row">
+    <b>Trạng thái kết nối:</b> 
+    <span class="badge-status" id="busStatus">KẾT NỐI</span>
+  </div>
+
+  <div class="legend-box">
+    <div class="legend-item">
+      <span class="legend-dot" style="background: #007aff;"></span>
+      <span>Lộ trình tim đường (Polyline)</span>
+    </div>
+    <div class="legend-item">
+      <span class="legend-dot" style="background: #009688;"></span>
+      <span>Trạm dừng đón trả khách (Points)</span>
+    </div>
+    <div class="legend-item">
+      <span class="legend-dot" style="background: #ff3b30;"></span>
+      <span>Xe buýt di chuyển Realtime</span>
+    </div>
+  </div>
+
+  <a href="admin.html" target="_blank" class="btn-admin-link" id="btnBottomAdminLink" style="display: none;">
+    <i class="fa-solid fa-sliders"></i> Mở Trang Quản Trị (Admin Portal)
+  </a>
+</div>

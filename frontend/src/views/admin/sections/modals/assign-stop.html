@@ -1,0 +1,38 @@
+<!-- MODAL: GÁN TRẠM VÀO TUYẾN THEO THỨ TỰ -->
+<div id="modal-assign-stop" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span>Gán Trạm Dừng Vào Tuyến</span>
+      <button class="btn btn-sm btn-outline" data-action="closeModal" data-arg="modal-assign-stop">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-assign-stop" data-submit="saveAssignStop">
+        <div class="form-group">
+          <label>Chọn Trạm Dừng có sẵn:</label>
+          <select id="assign_stop_id" class="form-control" required></select>
+        </div>
+        <div class="form-group">
+          <label>Tuyến xe áp dụng:</label>
+          <select id="assign_route_id" class="form-control" required></select>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label>Chiều di chuyển:</label>
+            <select id="assign_direction" class="form-control">
+              <option value="1">Lượt đi (Chiều 1)</option>
+              <option value="2">Lượt về (Chiều 2)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Số thứ tự đón (#):</label>
+            <input type="number" id="assign_stop_order" class="form-control" min="1" value="1" required />
+          </div>
+        </div>
+        <div class="modal-footer" style="padding-right:0; padding-bottom:0;">
+          <button type="button" class="btn btn-secondary" data-action="closeModal" data-arg="modal-assign-stop">Hủy</button>
+          <button type="submit" class="btn btn-success"><i class="fa-solid fa-link"></i> Xác Nhận Gán</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

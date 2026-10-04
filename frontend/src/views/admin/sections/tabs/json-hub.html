@@ -1,0 +1,84 @@
+<!-- ======================================================== -->
+<!-- TAB 5: NHẬP / XUẤT JSON TỌA ĐỘ VÀ DỮ LIỆU -->
+<!-- ======================================================== -->
+<div id="tab-json-hub" class="tab-pane">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fa-solid fa-file-code" style="color: var(--primary);"></i> 
+        Trung Tâm Nhập/Xuất JSON Tọa Độ (Đồng bộ Công cụ get_coords_1)
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <a href="../tools/get_coords_1.html" target="_blank" class="btn btn-outline">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i> Mở Bộ Trích Xuất Tọa Độ
+        </a>
+        <button class="btn btn-success" data-action="exportData" data-arg="all">
+          <i class="fa-solid fa-download"></i> Sao lưu Toàn bộ JSON
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="json-grid">
+        <div>
+          <!-- 1. Loại dữ liệu -->
+          <div class="form-group">
+            <label><b>1. Loại định dạng dữ liệu:</b></label>
+            <select id="import_type" class="form-control" data-change="handleImportTypeChange">
+              <option value="auto" selected>⚡ Tự động nhận diện định dạng (Hỗ trợ get_coords_1)</option>
+              <option value="full_package">📦 Gói Trọn Gói Tuyến (Lộ trình + Trạm dừng từ get_coords_1)</option>
+              <option value="route_path">🛣️ Tọa độ Lộ trình Tim đường (routeJson / LineString)</option>
+              <option value="stops">📍 Danh sách Trạm dừng (stopsJson / GeoJSON)</option>
+              <option value="vehicles">🚌 Danh sách Xe buýt (Vehicles)</option>
+              <option value="routes">🚏 Danh sách Tuyến xe (Routes)</option>
+              <option value="full_backup">💾 Khôi phục Toàn bộ Hệ thống (Full Backup)</option>
+            </select>
+          </div>
+
+          <!-- 2. Chọn Tuyến và Chiều áp dụng cho Tọa độ -->
+          <div style="background: #f0f7ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px; margin-bottom: 14px;" id="import_route_options">
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label style="color: #0284c7; font-weight: 600;"><i class="fa-solid fa-route"></i> Chọn Tuyến xe đích để nạp dữ liệu:</label>
+              <select id="import_route_id" class="form-control" style="font-weight: 600;"></select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label style="color: #0284c7; font-weight: 600;"><i class="fa-solid fa-arrows-left-right"></i> Chọn Chiều di chuyển:</label>
+              <select id="import_direction" class="form-control">
+                <option value="1">Lượt đi (Chiều 1)</option>
+                <option value="2">Lượt về (Chiều 2)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 3. Tải file hoặc dán JSON -->
+          <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+              <label style="margin-bottom: 0;"><b>2. Tải lên file JSON hoặc Dán nội dung:</b></label>
+              <span id="detected-format-badge" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #e2e8f0; color: #475569;">Chờ dữ liệu...</span>
+            </div>
+            <input type="file" id="import_file_input" accept=".json" class="form-control" data-change="handleFileUpload" style="margin-bottom: 8px;" />
+            <textarea id="import_json_textarea" class="form-control" rows="8" data-input="onJsonInputChanged" placeholder='Dán nội dung JSON xuất từ công cụ get_coords_1.html tại đây...'></textarea>
+          </div>
+
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary" data-action="previewJsonOnMap">
+              <i class="fa-solid fa-eye"></i> Xem trước trên Bản đồ
+            </button>
+            <button class="btn btn-primary" data-action="submitImportJson">
+              <i class="fa-solid fa-cloud-arrow-up"></i> Lưu Cập Nhật Vào CSDL
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size: 13px; font-weight: 600; margin-bottom: 5px; display: block;">
+            Bản đồ Trực quan hóa Tọa độ (ArcGIS Preview):
+          </label>
+          <div id="previewMapDiv"></div>
+          <div id="preview-info" style="font-size: 12px; color: var(--text-muted); margin-top: 8px; padding: 8px 12px; background: #fff; border: 1px solid var(--border); border-radius: 6px;">
+            Chưa tải dữ liệu xem trước. Hãy tải file JSON hoặc dán tọa độ và bấm "Xem trước trên Bản đồ".
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

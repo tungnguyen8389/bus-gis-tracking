@@ -1,0 +1,54 @@
+<!-- ======================================================== -->
+<!-- TAB 3: QUẢN LÝ TRẠM DỪNG THEO TUYẾN & CHIỀU -->
+<!-- ======================================================== -->
+<div id="tab-stops" class="tab-pane">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="fa-solid fa-location-dot"></i> Quản Lý Trạm Dừng Xe Buýt</div>
+    </div>
+    <div class="card-body">
+      <!-- THANH LỌC TRẠM THEO TUYẾN VÀ CHIỀU -->
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-weight: 700; font-size: 13px; color: #334155;"><i class="fa-solid fa-route"></i> Quản lý theo Tuyến:</label>
+          <select id="stop_filter_route" class="form-control" style="width: 250px; font-weight: 600;" data-change="onStopFilterChanged">
+            <option value="ALL">🌐 Tất cả các trạm trong hệ thống</option>
+          </select>
+        </div>
+
+        <div id="stop_filter_dir_group" style="display: none; align-items: center; gap: 8px;">
+          <label style="font-weight: 700; font-size: 13px; color: #334155;"><i class="fa-solid fa-arrows-left-right"></i> Chiều di chuyển:</label>
+          <select id="stop_filter_dir" class="form-control" style="width: 170px;" data-change="loadStops">
+            <option value="1">Lượt đi (Chiều 1)</option>
+            <option value="2">Lượt về (Chiều 2)</option>
+          </select>
+        </div>
+
+        <div style="margin-left: auto; display: flex; gap: 8px;">
+          <button class="btn btn-success" id="btnAssignStop" style="display: none;" data-action="openAssignStopModal">
+            <i class="fa-solid fa-link"></i> Gán Trạm vào Tuyến này
+          </button>
+          <button class="btn btn-primary" data-action="openStopModal">
+            <i class="fa-solid fa-plus"></i> Tạo Trạm Mới
+          </button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr id="stops-table-header">
+              <th>Mã trạm</th>
+              <th>Tên trạm dừng</th>
+              <th>Địa chỉ / Vị trí</th>
+              <th>Kinh độ (Lon)</th>
+              <th>Vĩ độ (Lat)</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="stops-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

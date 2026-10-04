@@ -1,0 +1,71 @@
+<!-- ======================================================== -->
+<!-- TAB 1: DASHBOARD TỔNG QUAN -->
+<!-- ======================================================== -->
+<div id="tab-dashboard" class="tab-pane active">
+  <div class="grid-stats">
+    <div class="stat-card">
+      <div>
+        <p>Tổng số Tuyến</p>
+        <h3 id="stat-routes">0</h3>
+      </div>
+      <div class="stat-icon" style="background: #e0f2fe; color: #0284c7;">
+        <i class="fa-solid fa-route"></i>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div>
+        <p>Tổng số Trạm dừng</p>
+        <h3 id="stat-stops">0</h3>
+      </div>
+      <div class="stat-icon" style="background: #f0fdf4; color: #16a34a;">
+        <i class="fa-solid fa-location-dot"></i>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div>
+        <p>Tổng số Xe buýt</p>
+        <h3 id="stat-vehicles">0</h3>
+      </div>
+      <div class="stat-icon" style="background: #fef3c7; color: #d97706;">
+        <i class="fa-solid fa-bus"></i>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div>
+        <p>Chuyến xe đã phân công</p>
+        <h3 id="stat-schedules">0</h3>
+      </div>
+      <div class="stat-icon" style="background: #fdf2f8; color: #db2777;">
+        <i class="fa-solid fa-calendar-check"></i>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div>
+        <p>Nhật ký GPS đã ghi</p>
+        <h3 id="stat-logs">0</h3>
+      </div>
+      <div class="stat-icon" style="background: #ede9fe; color: #7c3aed;">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Hệ Thống & Module Tách Biệt</div>
+      <button class="btn btn-sm btn-primary" data-action="loadDashboardStats">
+        <i class="fa-solid fa-rotate-right"></i> Làm mới số liệu
+      </button>
+    </div>
+    <div class="card-body" style="font-size: 13.5px; line-height: 1.7; color: #475569;">
+      <p>Hệ thống hỗ trợ quản trị tách biệt độc lập từng thực thể dữ liệu:</p>
+      <ul style="margin-left: 20px; margin-top: 8px;">
+        <li><b>Tọa độ & Lộ trình (GIS Spatial):</b> Quản lý mảng tọa độ `LineString` tim đường phân theo từng tuyến và chiều di chuyển.</li>
+        <li><b>Trạm đón/trả khách:</b> Quản lý tọa độ `Point` chuẩn WGS84 (SRID 4326), tên trạm và gán trạm theo từng tuyến/chiều cụ thể.</li>
+        <li><b>Đội xe & Lịch trình:</b> Quản lý phương tiện, biển số, tài xế, trạng thái và giờ xuất bến.</li>
+        <li><b>Nhập/Xuất JSON:</b> Cho phép import file `.json` hoặc dán trực tiếp chuỗi JSON để cập nhật tọa độ cho từng tuyến cụ thể.</li>
+        <li><b>Xác thực & Người dùng:</b> Bảo mật bằng JSON Web Token (JWT) và mã hóa Bcrypt.</li>
+      </ul>
+    </div>
+  </div>
+</div>
