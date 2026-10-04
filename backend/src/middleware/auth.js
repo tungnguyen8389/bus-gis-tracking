@@ -28,4 +28,17 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { authenticateToken, requireAdmin };
+// Cho qua khi vai trò trong token thuộc danh sách roles
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: "Tài khoản không có quyền thực hiện thao tác này" });
+    }
+    next();
+  };
+}
+
+// Nhân viên quản trị (ADMIN/MANAGER) — token tài xế (DRIVER) không được gọi API quản trị
+const requireStaff = requireRole("ADMIN", "MANAGER");
+
+module.exports = { authenticateToken, requireAdmin, requireRole, requireStaff };

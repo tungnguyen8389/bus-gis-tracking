@@ -1,6 +1,9 @@
 const bcrypt = require("bcryptjs");
 const { dbPool } = require("../../config/db");
 
+// Vai trò được phép gán qua trang quản trị (VIEWER không đăng nhập được nên không cấp)
+const ALLOWED_ROLES = ["ADMIN", "MANAGER", "DRIVER"];
+
 async function listUsers(req, res) {
   try {
     const [rows] = await dbPool.query(
@@ -17,12 +20,16 @@ async function createUser(req, res) {
   if (!username || !password || !full_name) {
     return res.status(400).json({ error: "Thiếu thông tin người dùng bắt buộc" });
   }
+  const finalRole = role || "MANAGER";
+  if (!ALLOWED_ROLES.includes(finalRole)) {
+    return res.status(400).json({ error: "Vai trò không hợp lệ" });
+  }
   try {
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
     await dbPool.query(
       "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
-      [username, password_hash, full_name, email || "", role || "MANAGER"]
+      [username, password_hash, full_name, email || "", finalRole]
     );
     res.status(201).json({ message: "Thêm người dùng thành công" });
   } catch (error) {
@@ -33,6 +40,9 @@ async function createUser(req, res) {
 async function updateUser(req, res) {
   const { id } = req.params;
   const { full_name, email, role, password } = req.body;
+  if (!ALLOWED_ROLES.includes(role)) {
+    return res.status(400).json({ error: "Vai trò không hợp lệ" });
+  }
   try {
     if (password && password.trim() !== "") {
       const salt = await bcrypt.genSalt(10);
