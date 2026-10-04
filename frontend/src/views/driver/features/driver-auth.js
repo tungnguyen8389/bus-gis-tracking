@@ -12,14 +12,15 @@ async function loadProfile() {
   state.schedules = me.schedules;
 }
 
-// Có token còn hạn → nạp hồ sơ; token hỏng/hết hạn → xóa và về màn đăng nhập
+// Có token còn hạn → nạp hồ sơ; token hỏng/hết hạn (401/403) → xóa và về màn đăng nhập
 export async function restoreSession() {
   if (!getToken(DRIVER_TOKEN_KEY)) return false;
   try {
     await loadProfile();
     return true;
   } catch (err) {
-    if (err instanceof ApiError) clearToken(DRIVER_TOKEN_KEY);
+    // Chỉ 401/403 mới xóa token; lỗi 5xx hoặc mất mạng giữ token để thử lại
+    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) clearToken(DRIVER_TOKEN_KEY);
     else showToast("Không kết nối được máy chủ", "error");
     return false;
   }
