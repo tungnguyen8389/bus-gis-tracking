@@ -1,6 +1,10 @@
 const http = require("http");
 const { Server } = require("socket.io");
 const { PORT } = require("./src/config/env");
+
+if (!process.env.JWT_SECRET) {
+  console.warn(">>> [Cảnh báo] Chưa đặt JWT_SECRET trong .env — đang dùng khóa mặc định, không dùng cho môi trường thật.");
+}
 const { initDatabase } = require("./src/config/db");
 const app = require("./src/app");
 const registerTrackingSocket = require("./src/sockets/tracking.socket");
