@@ -1,0 +1,50 @@
+<!-- SIDEBAR NAVIGATION -->
+<div id="sidebar">
+  <div class="brand">
+    <i class="fa-solid fa-map-location-dot"></i>
+    <span>BUS GIS PORTAL</span>
+  </div>
+
+  <ul class="nav-list">
+    <li class="nav-item active" data-action="switchTab" data-arg="dashboard">
+      <i class="fa-solid fa-chart-pie"></i>
+      <span>Tổng quan</span>
+    </li>
+    <li class="nav-item" data-action="switchTab" data-arg="routes">
+      <i class="fa-solid fa-route"></i>
+      <span>Quản lý Tuyến xe</span>
+    </li>
+    <li class="nav-item" data-action="switchTab" data-arg="stops">
+      <i class="fa-solid fa-location-dot"></i>
+      <span>Quản lý Trạm theo Tuyến</span>
+    </li>
+    <li class="nav-item" data-action="switchTab" data-arg="vehicles">
+      <i class="fa-solid fa-bus-simple"></i>
+      <span>Quản lý Đội xe</span>
+    </li>
+    <li class="nav-item" data-action="switchTab" data-arg="schedules">
+      <i class="fa-solid fa-calendar-days"></i>
+      <span>Phân công Chuyến & Xe</span>
+    </li>
+    <li class="nav-item" data-action="switchTab" data-arg="json-hub">
+      <i class="fa-solid fa-file-code"></i>
+      <span>Nhập/Xuất JSON Tọa độ</span>
+    </li>
+    <li class="nav-item" data-action="switchTab" data-arg="users" id="nav-users">
+      <i class="fa-solid fa-users-gear"></i>
+      <span>Quản lý Người dùng</span>
+    </li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <div>
+        <div id="user-display-name" style="font-weight: 600; color: #fff;">Admin</div>
+        <span id="user-display-role" class="badge badge-admin">ADMIN</span>
+      </div>
+      <button class="btn btn-sm btn-danger" data-action="handleLogout" title="Đăng xuất">
+        <i class="fa-solid fa-power-off"></i>
+      </button>
+    </div>
+  </div>
+</div>

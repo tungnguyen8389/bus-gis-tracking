@@ -1,0 +1,23 @@
+<!-- MODAL ĐĂNG NHẬP QUẢN TRỊ: đăng nhập ngay trên trang bản đồ -->
+<div id="loginModal" data-action="loginBackdrop">
+  <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+    <div class="panel-header">
+      <h3 id="loginTitle"><i class="fa-solid fa-user-shield"></i> ĐĂNG NHẬP QUẢN TRỊ</h3>
+      <button type="button" class="login-close" data-action="closeLoginModal" aria-label="Đóng"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form data-submit="handleStaffLogin">
+      <div class="login-alert" id="loginAlert"></div>
+      <div class="form-group">
+        <label for="loginUsername">Tên đăng nhập</label>
+        <input type="text" id="loginUsername" autocomplete="username" required />
+      </div>
+      <div class="form-group">
+        <label for="loginPassword">Mật khẩu</label>
+        <input type="password" id="loginPassword" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="login-submit" id="btnLoginSubmit">
+        <i class="fa-solid fa-right-to-bracket"></i> Đăng nhập
+      </button>
+    </form>
+  </div>
+</div>

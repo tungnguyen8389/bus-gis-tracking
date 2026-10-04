@@ -1,0 +1,81 @@
+<!-- CỘT BÊN TRÁI (SIDEBAR): DANH SÁCH TUYẾN, TÌM KIẾM TRẠM, BẬT/TẮT LỚP -->
+<div id="routeControlPanel" style="display: none;">
+  <div class="panel-header">
+    <h3><i class="fa-solid fa-bus"></i> LỘ TRÌNH XE BUÝT</h3>
+    <span id="routeCountBadge" style="font-size: 11px; background: rgba(255,255,255,0.25); padding: 2px 6px; border-radius: 4px;">3 tuyến</span>
+  </div>
+
+  <div class="panel-body">
+    <!-- 1. Danh sách Tuyến xe (Tuyến 08, Tuyến 10, Tuyến 53) -->
+    <div class="form-group">
+      <label><i class="fa-solid fa-list-check"></i> Chọn Tuyến Xe Buýt:</label>
+      <select id="routeSelect" class="select-route" data-change="onRouteChanged">
+        <option value="ALL">🌐 Hiển thị Tất cả các Tuyến</option>
+      </select>
+    </div>
+
+    <!-- 2. Chiều Di Chuyển (Lượt đi / Lượt về) -->
+    <div class="form-group" id="directionGroup">
+      <label><i class="fa-solid fa-arrows-left-right"></i> Chiều di chuyển:</label>
+      <div class="direction-toggle">
+        <button type="button" class="dir-btn active" id="btnDir1" data-action="setDirection" data-arg="1">
+          <i class="fa-solid fa-arrow-right"></i> Lượt Đi
+        </button>
+        <button type="button" class="dir-btn" id="btnDir2" data-action="setDirection" data-arg="2">
+          <i class="fa-solid fa-arrow-left"></i> Lượt Về
+        </button>
+      </div>
+    </div>
+
+    <!-- 3. Ô Tìm kiếm Trạm xe -->
+    <div class="form-group">
+      <label><i class="fa-solid fa-magnifying-glass"></i> Tìm kiếm trạm dừng:</label>
+      <div class="search-box">
+        <i class="fa-solid fa-search"></i>
+        <input type="text" id="stopSearchInput" placeholder="Nhập tên trạm (VD: KTX, KHTN...)" data-input="filterStops" />
+      </div>
+    </div>
+
+    <!-- 4. Nút Bật/Tắt hiển thị các lớp trạm/lộ trình/xe -->
+    <div class="layer-toggles">
+      <div class="toggle-row">
+        <label><i class="fa-solid fa-location-dot" style="color: #009688;"></i> Hiển thị Trạm xe buýt</label>
+        <input type="checkbox" id="toggleStops" checked data-change="toggleLayer" data-arg="stops" />
+      </div>
+      <div class="toggle-row">
+        <label><i class="fa-solid fa-route" style="color: #007aff;"></i> Hiển thị Lộ trình tuyến</label>
+        <input type="checkbox" id="toggleRoute" checked data-change="toggleLayer" data-arg="route" />
+      </div>
+      <div class="toggle-row">
+        <label><i class="fa-solid fa-bus" style="color: #ff3b30;"></i> Hiển thị Xe buýt Realtime</label>
+        <input type="checkbox" id="toggleFleet" checked data-change="toggleLayer" data-arg="fleet" />
+      </div>
+    </div>
+
+    <!-- 5. Thông tin chi tiết Tuyến đang chọn -->
+    <div class="route-info-box" id="routeInfoBox">
+      <div style="font-weight: 700; color: #0079c1; margin-bottom: 6px;" id="routeNameDisplay">
+        Tất cả các tuyến ĐHQG TP.HCM
+      </div>
+      <div class="info-grid">
+        <div class="info-cell">
+          <b>CỰ LY TUYẾN:</b>
+          <span id="routeDistanceDisplay">-- km</span>
+        </div>
+        <div class="info-cell">
+          <b>GIÃN CÁCH:</b>
+          <span id="routeHeadwayDisplay">-- phút</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Danh sách các Trạm dừng trên tuyến -->
+    <div class="section-title">
+      <span><i class="fa-solid fa-list-ol"></i> DANH SÁCH TRẠM ĐÓN KHÁCH:</span>
+      <span id="stopsCount" style="font-weight: 600; color: #009688;">0 trạm</span>
+    </div>
+    <ul class="stops-timeline" id="stopsTimeline">
+      <li style="padding: 10px; color: #94a3b8; text-align: center;">Đang tải danh sách trạm...</li>
+    </ul>
+  </div>
+</div>

@@ -1,0 +1,39 @@
+<!-- MODAL: TRẠM DỪNG -->
+<div id="modal-stop" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span id="modal-stop-title">Thêm Trạm Dừng Xe Buýt</span>
+      <button class="btn btn-sm btn-outline" data-action="closeModal" data-arg="modal-stop">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-stop" data-submit="saveStop">
+        <div class="form-group">
+          <label>Mã trạm (Stop ID):</label>
+          <input type="text" id="stop_id" class="form-control" placeholder="ST_09" required />
+        </div>
+        <div class="form-group">
+          <label>Tên trạm dừng:</label>
+          <input type="text" id="stop_name" class="form-control" placeholder="Trạm ĐH Nông Lâm" required />
+        </div>
+        <div class="form-group">
+          <label>Địa chỉ:</label>
+          <input type="text" id="stop_address" class="form-control" placeholder="QL1A, P. Linh Trung" />
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label>Kinh độ (Longitude):</label>
+            <input type="number" step="0.000001" id="stop_lon" class="form-control" placeholder="106.8033" required />
+          </div>
+          <div class="form-group">
+            <label>Vĩ độ (Latitude):</label>
+            <input type="number" step="0.000001" id="stop_lat" class="form-control" placeholder="10.8705" required />
+          </div>
+        </div>
+        <div class="modal-footer" style="padding-right:0; padding-bottom:0;">
+          <button type="button" class="btn btn-secondary" data-action="closeModal" data-arg="modal-stop">Hủy</button>
+          <button type="submit" class="btn btn-primary">Lưu Trạm Dừng</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,30 @@
+<!-- CỘT BÊN TRÁI CHO KHÁCH: NHẬP ĐIỂM ĐẾN → LIỆT KÊ TUYẾN ĐI THẲNG TỪ VỊ TRÍ HIỆN TẠI -->
+<div id="guestTripPanel" style="display: none;">
+  <div class="panel-header">
+    <h3><i class="fa-solid fa-bus"></i> TÌM TUYẾN XE BUÝT</h3>
+  </div>
+
+  <div class="panel-body">
+    <div class="form-group">
+      <label for="destInput"><i class="fa-solid fa-flag-checkered"></i> Bạn muốn đến đâu?</label>
+      <div class="search-box">
+        <i class="fa-solid fa-search"></i>
+        <input type="text" id="destInput" placeholder="Nhập tên trạm hoặc địa chỉ (VD: Bến Thành)" autocomplete="off" data-input="renderDestSuggestions" />
+      </div>
+      <ul class="stops-timeline" id="destSuggestions"></ul>
+    </div>
+
+    <div class="trip-origin-status" id="tripOriginStatus">
+      <i class="fa-solid fa-location-crosshairs"></i>
+      <span>Chọn điểm đến, hệ thống sẽ dùng vị trí hiện tại của bạn để tìm tuyến.</span>
+    </div>
+
+    <div class="section-title">
+      <span><i class="fa-solid fa-route"></i> TUYẾN XE PHÙ HỢP:</span>
+      <span id="tripResultsCount" style="font-weight: 600; color: #009688;"></span>
+    </div>
+    <ul class="trip-results" id="tripResults">
+      <li class="trip-empty">Chưa chọn điểm đến</li>
+    </ul>
+  </div>
+</div>

@@ -1,0 +1,41 @@
+<!-- MODAL: XE BUÝT -->
+<div id="modal-vehicle" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span id="modal-vehicle-title">Thêm Phương Tiện Xe Buýt</span>
+      <button class="btn btn-sm btn-outline" data-action="closeModal" data-arg="modal-vehicle">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-vehicle" data-submit="saveVehicle">
+        <div class="form-group">
+          <label>Mã định danh (Vehicle ID):</label>
+          <input type="text" id="vehicle_id" class="form-control" placeholder="BUS_51B_05" required />
+        </div>
+        <div class="form-group">
+          <label>Biển số xe:</label>
+          <input type="text" id="plate_number" class="form-control" placeholder="51B-777.66" required />
+        </div>
+        <div class="form-group">
+          <label>Sức chứa (hành khách):</label>
+          <input type="number" id="vehicle_capacity" class="form-control" value="45" />
+        </div>
+        <div class="form-group">
+          <label>Họ tên tài xế:</label>
+          <input type="text" id="driver_name" class="form-control" placeholder="Trần Văn E" />
+        </div>
+        <div class="form-group">
+          <label>Trạng thái vận hành:</label>
+          <select id="vehicle_status" class="form-control">
+            <option value="ACTIVE">ACTIVE (Đang hoạt động)</option>
+            <option value="MAINTENANCE">MAINTENANCE (Bảo dưỡng)</option>
+            <option value="INACTIVE">INACTIVE (Ngừng hoạt động)</option>
+          </select>
+        </div>
+        <div class="modal-footer" style="padding-right:0; padding-bottom:0;">
+          <button type="button" class="btn btn-secondary" data-action="closeModal" data-arg="modal-vehicle">Hủy</button>
+          <button type="submit" class="btn btn-primary">Lưu Xe Buýt</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

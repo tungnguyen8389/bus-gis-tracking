@@ -1,0 +1,36 @@
+<!-- ======================================================== -->
+<!-- TAB 4: QUẢN LÝ ĐỘI XE -->
+<!-- ======================================================== -->
+<div id="tab-vehicles" class="tab-pane">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title"><i class="fa-solid fa-bus-simple" style="color: var(--primary);"></i> Danh Mục Phương Tiện Xe Buýt</div>
+        <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">Quản lý thông tin đầu xe, tài xế, sức chứa và phân công hoạt động</p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-primary" data-action="openVehicleModal">
+          <i class="fa-solid fa-plus"></i> Thêm Xe Mới
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã định danh</th>
+              <th>Biển số xe</th>
+              <th>Sức chứa</th>
+              <th>Tài xế phụ trách</th>
+              <th>Trạng thái</th>
+              <th>Tuyến / Chuyến đảm nhận</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody id="vehicles-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

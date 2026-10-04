@@ -1,0 +1,43 @@
+<!-- MODAL: PHÂN CÔNG CHUYẾN XE / GÁN XE CHO CHUYẾN -->
+<div id="modal-schedule" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span id="modal-schedule-title">Phân Công Xe Vào Chuyến Mới</span>
+      <button class="btn btn-sm btn-outline" data-action="closeModal" data-arg="modal-schedule">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-schedule" data-submit="saveSchedule">
+        <input type="hidden" id="edit_schedule_id" />
+
+        <div class="form-group">
+          <label><b>1. Chọn Tuyến xe buýt:</b></label>
+          <select id="modal_schedule_route_id" class="form-control" required></select>
+        </div>
+
+        <div class="form-group">
+          <label><b>2. Chọn Chiều di chuyển:</b></label>
+          <select id="modal_schedule_direction" class="form-control" required>
+            <option value="1">Lượt đi (Chiều 1)</option>
+            <option value="2">Lượt về (Chiều 2)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label><b>3. Chọn Xe buýt đảm nhận chuyến:</b></label>
+          <select id="modal_schedule_vehicle_id" class="form-control" required></select>
+        </div>
+
+        <div class="form-group">
+          <label><b>4. Giờ khởi hành xuất bến:</b></label>
+          <input type="time" id="modal_schedule_departure_time" class="form-control" required value="06:30" />
+          <small style="color: var(--text-muted); font-size: 11px;">Định dạng 24 giờ (VD: 06:30, 07:15, 14:45...)</small>
+        </div>
+
+        <div class="modal-footer" style="padding-right:0; padding-bottom:0;">
+          <button type="button" class="btn btn-secondary" data-action="closeModal" data-arg="modal-schedule">Hủy</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-check"></i> Lưu Phân Công</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

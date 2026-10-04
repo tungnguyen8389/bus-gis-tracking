@@ -1,0 +1,41 @@
+<!-- MODAL: NGƯỜI DÙNG -->
+<div id="modal-user" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span id="modal-user-title">Thêm Người Dùng Mới</span>
+      <button class="btn btn-sm btn-outline" data-action="closeModal" data-arg="modal-user">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-user" data-submit="saveUser">
+        <input type="hidden" id="edit_user_id" />
+        <div class="form-group" id="user_username_group">
+          <label>Tên đăng nhập:</label>
+          <input type="text" id="user_username" class="form-control" placeholder="nv_dieu_hanh" required />
+        </div>
+        <div class="form-group">
+          <label>Mật khẩu:</label>
+          <input type="password" id="user_password" class="form-control" placeholder="••••••••" />
+        </div>
+        <div class="form-group">
+          <label>Họ và tên:</label>
+          <input type="text" id="user_fullname" class="form-control" placeholder="Nguyễn Văn Quản Lý" required />
+        </div>
+        <div class="form-group">
+          <label>Email:</label>
+          <input type="email" id="user_email" class="form-control" placeholder="user@busgis.vn" />
+        </div>
+        <div class="form-group">
+          <label>Phân quyền (Role):</label>
+          <select id="user_role" class="form-control">
+            <option value="MANAGER">MANAGER (Quản lý dữ liệu & Tọa độ)</option>
+            <option value="ADMIN">ADMIN (Toàn quyền quản trị)</option>
+          </select>
+        </div>
+        <div class="modal-footer" style="padding-right:0; padding-bottom:0;">
+          <button type="button" class="btn btn-secondary" data-action="closeModal" data-arg="modal-user">Hủy</button>
+          <button type="submit" class="btn btn-primary">Lưu Người Dùng</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

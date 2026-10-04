@@ -1,0 +1,64 @@
+<!-- ======================================================== -->
+<!-- TAB: PHÂN CÔNG CHUYẾN XE & LỊCH TRÌNH -->
+<!-- ======================================================== -->
+<div id="tab-schedules" class="tab-pane">
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title"><i class="fa-solid fa-calendar-days" style="color: var(--primary);"></i> Phân Công Phương Tiện Cho Chuyến Xe & Lịch Trình</div>
+        <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">Gán xe cụ thể (biển số, tài xế) đảm nhận các chuyến chạy theo tuyến, chiều và giờ xuất bến</p>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-primary" data-action="openScheduleModal">
+          <i class="fa-solid fa-calendar-plus"></i> Phân Công Chuyến Mới
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <!-- Filter Bar -->
+      <div style="display: flex; gap: 15px; margin-bottom: 18px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; align-items: flex-end;">
+        <div class="form-group" style="margin-bottom: 0; min-width: 220px;">
+          <label style="font-size: 12px; font-weight: 600;"><i class="fa-solid fa-filter"></i> Lọc theo Tuyến xe:</label>
+          <select id="schedule_filter_route" class="form-control" data-change="loadSchedules">
+            <option value="ALL">🌐 Tất cả các tuyến</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; min-width: 180px;">
+          <label style="font-size: 12px; font-weight: 600;"><i class="fa-solid fa-arrows-left-right"></i> Lọc theo Chiều:</label>
+          <select id="schedule_filter_dir" class="form-control" data-change="loadSchedules">
+            <option value="ALL">Tất cả các chiều</option>
+            <option value="1">Lượt đi (Chiều 1)</option>
+            <option value="2">Lượt về (Chiều 2)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; min-width: 200px;">
+          <label style="font-size: 12px; font-weight: 600;"><i class="fa-solid fa-bus"></i> Lọc theo Xe buýt:</label>
+          <select id="schedule_filter_vehicle" class="form-control" data-change="loadSchedules">
+            <option value="ALL">Tất cả xe buýt</option>
+          </select>
+        </div>
+        <button class="btn btn-sm btn-outline" data-action="resetScheduleFilters">
+          <i class="fa-solid fa-rotate-left"></i> Đặt lại bộ lọc
+        </button>
+      </div>
+
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Mã Chuyến</th>
+              <th>Giờ Xuất Bến</th>
+              <th>Tuyến Xe Đảm Nhận</th>
+              <th>Chiều Di Chuyển</th>
+              <th>Xe Buýt Phân Công</th>
+              <th>Tài Xế</th>
+              <th>Trạng Thái Xe</th>
+              <th>Thao Tác</th>
+            </tr>
+          </thead>
+          <tbody id="schedules-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
