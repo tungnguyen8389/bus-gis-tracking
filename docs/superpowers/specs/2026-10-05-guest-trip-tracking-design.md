@@ -66,14 +66,30 @@ createTripRegistry({ now = Date.now }) → {
 
 ### 2.2 Device socket `/device` (`device.socket.js`)
 
+**Chuyến đang chạy được quản lý theo xe, không theo socket.**
+- Thay `onMap: Set<vehicle_id>` bằng `liveTrips: Map<vehicle_id, schedule_id>`, nghĩa là xe nào đang hiện trên bản đồ, thuộc chuyến nào.
+- Lý do: khi phiên bị thay, `previous.disconnect(true)` gọi handler `disconnect` của socket cũ. Handler đó thoát sớm vì `activeDevices` đã trỏ sang socket mới. Nếu `registry.end` gắn vào socket thì sẽ không bao giờ chạy, và chuyến cũ thành "chuyến ma" mãi ở trạng thái RUNNING.
+
+Hàm nội bộ `endLiveTrip(vehicleId)`:
+- đọc `schedule_id` từ `liveTrips`;
+- gọi `registry.end(schedule_id)`;
+- phát `vehicle_offline { vehicle_id, schedule_id }` vào room `trip:<schedule_id>` và room `staff`;
+- xóa `vehicleId` khỏi `liveTrips`.
+
+Các sự kiện:
 - **`trip:start`:**
   - Câu SELECT lấy thêm `s.departure_time`.
-  - Nếu socket đang chạy một chuyến khác: gọi `registry.end(chuyến cũ)`, phát `vehicle_offline` vào room của chuyến cũ, rồi gọi `registry.start(chuyến mới)`.
+  - Nếu `liveTrips` đang giữ **một chuyến khác** của xe này: gọi `endLiveTrip` trước.
+  - Đặt `socket.data.trip`.
+  - Nếu chuyến chưa có trong registry thì `registry.start`, rồi ghi `liveTrips.set(vehicle_id, schedule_id)`.
+  - Phiên thay thế gửi lại **cùng** `schedule_id` thì giữ nguyên bản ghi registry, không mất các mẫu vận tốc.
 - **`gps_ping` hợp lệ:**
   - Gói tin thêm `schedule_id`.
   - Gửi `fleet_location_update` tới room `trip:<schedule_id>` và room `staff` (Mục 4.1).
   - Gọi `registry.recordPing`.
-- **`trip:end`, `disconnect`, phiên bị thay:** gọi `registry.end` và phát `vehicle_offline` vào room `trip:<schedule_id>` và room `staff`. Giữ nguyên logic `onMap` hiện có cho phiên thay thế.
+- **`trip:end`:** `socket.data.trip = null`, rồi gọi `endLiveTrip(vehicle_id)` nếu xe có trong `liveTrips`. Trường hợp phiên thay thế chưa có `trip` nhưng xe vẫn đang hiện trên bản đồ cũng được xử lý đúng.
+- **`disconnect` của socket đang giữ xe:** gọi `endLiveTrip(vehicle_id)`.
+- **`disconnect` của phiên đã bị thay:** không làm gì, giữ bản ghi registry.
 - **Bỏ** hẳn việc phát tới mọi viewer. `createViewerBroadcaster` đổi thành:
   - `publishLocation(packet)`
   - `publishOffline({ vehicle_id, schedule_id })`
@@ -108,6 +124,7 @@ Hằng số đặt trong `eta.js`:
   - Nếu chưa đủ: `v` = trung bình `speed_kmh` của các gói đã nhận.
   - Nếu cả hai đều không có: `v = DEFAULT_SPEED_KMH`.
   - Cuối cùng kẹp `v` vào khoảng `[MIN_SPEED_KMH, MAX_SPEED_KMH]`.
+  - **Xe quay về đầu tuyến** (simulator chạy vòng lộ trình): khi tính, nếu progress của một mẫu nhỏ hơn mẫu ngay trước nó, chỉ dùng các mẫu từ điểm tụt trở đi. Nếu phần còn lại ngắn hơn `MIN_WINDOW_MS` thì dùng mức dự phòng.
 - **Chuyến sắp tới:** `v` = trung bình `v` của các chuyến **đang chạy cùng tuyến** (cả hai chiều). Tuyến chưa có chuyến nào đang chạy thì dùng `DEFAULT_SPEED_KMH`.
 
 ### 3.3 Trạng thái và ETA cho một trạm lên `B`
@@ -236,13 +253,30 @@ Bảng "Theo dõi xe" của khách **không** hiện "Trạm tiếp theo" (khác
 ### 6.1 `seed_drivers.js`
 - Giữ `--count` (mặc định 20). Hằng số `DRIVERS_PER_ROUTE = 4`, số tuyến là `ceil(count / 4)`.
 - Chỉ lấy tuyến có đủ hai chiều, thứ tự chọn tuyến như hiện nay.
-- Tài xế thứ `i` (0..3) của một tuyến có các chuyến xuất bến lúc `05:00 + i×15 phút + k×60 phút`, với `k = 0..16`. Chiều chạy là `k chẵn → 1`, `k lẻ → 2`.
-- Kết quả: mỗi tuyến có một chuyến cứ 15 phút, mỗi tài xế khoảng 17 chuyến/ngày.
+- Tài xế thứ `i` (0..3) của một tuyến có các chuyến xuất bến lúc `05:00 + i×15 phút + k×60 phút`, với `k = 0..16`. Chiều chạy là `(i + k) % 2 === 0 → 1`, ngược lại là `2`.
+- Kết quả:
+  - mỗi tuyến có một chuyến cứ 15 phút, các chiều xen kẽ nhau;
+  - **mỗi chiều có một chuyến cứ 30 phút**;
+  - mỗi tài xế khoảng 17 chuyến/ngày, đổi chiều sau mỗi chuyến.
 - Vẫn upsert idempotent: giữ `vehicle_tracking_logs`, thay mới `schedules` của xe seed, xóa bản ghi thừa.
 
 ### 6.2 Simulator (`virtual-driver.js`)
-- Chọn chuyến có `departure_time` muộn nhất nhưng không vượt quá giờ hiện tại. Trước chuyến đầu ngày thì lấy chuyến đầu. Thay cho `schedules[0]` hiện nay.
-- Viết thành hàm thuần `pickSchedule(schedules, now)` để test được.
+- **Lúc khởi động:**
+  - Chọn chuyến có `departure_time` muộn nhất nhưng không vượt quá giờ hiện tại. Thay cho `schedules[0]` hiện nay.
+  - Nếu đang trước chuyến đầu ngày: lấy chuyến đầu.
+  - Xuất phát ở vị trí ngẫu nhiên trên lộ trình như hiện nay.
+- **Tự đổi chuyến:**
+  - Mỗi tick, kiểm tra xem đã tới `departure_time` của chuyến kế tiếp chưa.
+  - Nếu tới rồi:
+    - nạp lộ trình của chiều mới;
+    - đặt `distance = 0`;
+    - gửi `trip:start` cho chuyến mới. Server sẽ tự kết thúc chuyến cũ (Mục 2.2).
+  - Sau chuyến cuối ngày: vẫn chạy tiếp chuyến đó.
+  - Nhờ vậy khi demo thấy được chuyến UPCOMING tự chuyển sang RUNNING, và chuyến không bị treo RUNNING suốt ngày.
+- Gửi lại `trip:start` khi kết nối lại thì dùng chuyến hiện tại (`this.schedule`), không chọn lại.
+- Viết thành hai hàm thuần để test được:
+  - `pickSchedule(schedules, now)`: chuyến hiện tại;
+  - `nextSchedule(schedules, current)`: chuyến kế tiếp, hoặc `null`.
 
 ## 7. Kiểm thử
 
@@ -260,7 +294,11 @@ Bảng "Theo dõi xe" của khách **không** hiện "Trạm tiếp theo" (khác
   - lấy mẫu 15 giây và cắt cửa sổ 5 phút;
   - phát `change` khi start/end;
   - `listByRoute`.
-- `pickSchedule` của simulator.
+- `eta.js`: xe quay về đầu tuyến trong cửa sổ mẫu thì vận tốc không âm và chỉ tính trên các mẫu sau điểm tụt.
+- Simulator:
+  - `pickSchedule`: trước chuyến đầu, giữa ngày, sau chuyến cuối;
+  - `nextSchedule`;
+  - một ca đổi chuyến: tới giờ thì gửi `trip:start` với `schedule_id` mới và lộ trình được nạp lại.
 
 **Viewer socket** (harness giống `device.socket.test.js`)
 - Khách chưa gửi `trip:watch` thì không nhận `fleet_location_update`.
@@ -272,7 +310,11 @@ Bảng "Theo dõi xe" của khách **không** hiện "Trạm tiếp theo" (khác
 - `vehicle_offline` chỉ tới room của chuyến đó và room `staff`.
 
 **Cập nhật test có sẵn**
-- `device.socket.test.js`: phát theo room, `trip:start` khi socket đang chạy chuyến khác.
+- `device.socket.test.js`:
+  - phát theo room;
+  - `trip:start` khi xe đang chạy chuyến khác: chuyến cũ bị end, và `vehicle_offline` gửi vào room của chuyến cũ;
+  - phiên bị thay rồi gửi lại cùng `schedule_id`: registry giữ nguyên bản ghi;
+  - phiên bị thay rồi ngắt trước khi gửi `trip:start`: chuyến end đúng một lần, không thành chuyến ma.
 - Module 4 của `test_suite.js`: viewer phải gửi `trip:watch` trước khi chờ gói GPS; thêm ca khách không watch thì không nhận gì.
 
 **Thủ công (Playwright)**
@@ -292,10 +334,10 @@ Bảng "Theo dõi xe" của khách **không** hiện "Trạm tiếp theo" (khác
 | `backend/src/sockets/trip-registry.js` | mới |
 | `backend/src/sockets/eta.js` | mới |
 | `backend/src/sockets/viewer.socket.js` | handshake, các sự kiện watch/subscribe, timer đẩy `trips:update` |
-| `backend/src/sockets/device.socket.js` | phát theo room, gọi registry, đổi chuyến |
+| `backend/src/sockets/device.socket.js` | `onMap` → `liveTrips`, phát theo room, gọi registry, đổi chuyến |
 | `backend/src/sockets/index.js` | tạo registry, nối vào cả hai namespace |
 | `backend/scripts/seed_drivers.js` | 4 tài xế/tuyến, nhiều chuyến mỗi ngày |
-| `simulator/src/virtual-driver.js` | `pickSchedule` |
+| `simulator/src/virtual-driver.js` | `pickSchedule`, `nextSchedule`, tự đổi chuyến |
 | `frontend/src/modules/realtime/realtime.service.js` | nhận `token`, trả socket để emit |
 | `frontend/src/views/map/features/trip-finder/trip-watch.js` | mới |
 | `frontend/src/views/map/features/trip-finder/trip-finder.js` | danh sách chuyến dưới thẻ tuyến |
