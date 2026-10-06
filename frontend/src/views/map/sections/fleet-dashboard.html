@@ -18,8 +18,26 @@
     <span id="busCoord" style="font-family: monospace; font-size: 11.5px;">[106.8000, 10.8700]</span>
   </div>
 
+  <!-- Chỉ khách đang theo dõi 1 chuyến -->
+  <div id="guestTripInfo" style="display: none;">
+    <div class="info-row">
+      <b>Tài xế:</b>
+      <span id="busDriver" style="font-weight: 600; color: #0f172a;">--</span>
+    </div>
+    <div class="info-row">
+      <b>Giờ xuất bến:</b>
+      <span id="busDeparture" style="font-weight: 600; color: #0f172a;">--</span>
+    </div>
+    <div class="next-stop-highlight">
+      <div style="font-size: 11px; color: #1e40af; font-weight: bold; margin-bottom: 2px;">
+        <i class="fa-solid fa-clock"></i> DỰ KIẾN TỚI TRẠM CỦA BẠN:
+      </div>
+      <div id="busEta" style="font-weight: 700; color: #0369a1; font-size: 12.5px;">--</div>
+    </div>
+  </div>
+
   <!-- Trạm tiếp theo sắp tới -->
-  <div class="next-stop-highlight">
+  <div class="next-stop-highlight" id="nextStopBlock">
     <div style="font-size: 11px; color: #1e40af; font-weight: bold; margin-bottom: 2px;">
       <i class="fa-solid fa-forward-step"></i> TRẠM TIẾP THEO SẮP TỚI:
     </div>

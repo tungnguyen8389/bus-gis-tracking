@@ -8,7 +8,7 @@ import { showToast } from "../../../core/toast.js";
 import { getToken, setToken, clearToken } from "../../../core/session.js";
 import { ApiError } from "../../../core/http.js";
 import { clearRouteGraphics } from "./base-map.js";
-import { applyFleetFilter } from "./fleet-tracking.js";
+import { applyFleetFilter, connectFleetSocket } from "./fleet-tracking.js";
 import { loadRoutesList, resetDirection } from "./route-browser.js";
 import { loadStopIndex, hasStopIndex, clearTripLayer } from "./trip-finder/trip-finder.js";
 import { isStaffRole, login, getCurrentUser } from "../../../modules/auth/auth.service.js";
@@ -35,6 +35,13 @@ function applyAuthState(user) {
   show("btnBottomAdminLink", isStaff, "block");
   show("routeControlPanel", isStaff);
   show("guestTripPanel", !isStaff);
+  // Bảng "Theo dõi xe": nhân viên luôn thấy; khách chỉ thấy khi đang theo dõi 1 chuyến
+  show("fleetDashboard", isStaff, "block");
+  show("nextStopBlock", isStaff, "block");
+  show("guestTripInfo", false, "block");
+  state.isStaff = isStaff;
+  state.watchedScheduleId = null;
+  connectFleetSocket(isStaff ? getToken() : null);
 
   clearTripLayer();
   if (isStaff) {

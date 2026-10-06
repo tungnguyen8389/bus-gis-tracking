@@ -4,6 +4,8 @@ import { showToast } from "../../../core/toast.js";
 import { getRoutePath, flattenPathCoords } from "../../../modules/paths/paths.service.js";
 import { listRouteStops } from "../../../modules/stops/stops.service.js";
 import { connectRealtime } from "../../../modules/realtime/realtime.service.js";
+import { getToken } from "../../../core/session.js";
+import { DRIVER_TOKEN_KEY } from "../../../core/config.js";
 import { nextStop } from "./next-stop.js";
 import { directionLabel } from "./trip-select.js";
 
@@ -92,7 +94,7 @@ function hideBus() {
   refreshSourceBadge();
 }
 
-// Vị trí xe mình lấy từ feed viewer → hiển thị đúng dù GPS đến từ điện thoại hay simulator
+// Vị trí xe mình lấy từ room vehicle:<id> (server cho vào theo token) → đúng dù GPS đến từ điện thoại hay simulator
 function onFleetUpdate(data) {
   if (!state.vehicle || data.vehicle_id !== state.vehicle.vehicle_id) return;
   ctx.lastFixAt = Date.now();
@@ -151,6 +153,7 @@ export async function openDrive() {
   await drawRoute(schedule);
 
   ctx.socket = connectRealtime({
+    token: getToken(DRIVER_TOKEN_KEY),
     onConnect: () => setBadge("connBadge", "ONLINE", "badge-on"),
     onDisconnect: () => setBadge("connBadge", "OFFLINE", "badge-off"),
     onFleetUpdate,

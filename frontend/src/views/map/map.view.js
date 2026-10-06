@@ -2,7 +2,6 @@
 import { mountSections } from "../../core/dom.js";
 import { registerActions } from "../../core/actions.js";
 import { createBaseMap, toggleLayer } from "./features/base-map.js";
-import { initSocketRealtime } from "./features/fleet-tracking.js";
 import { onRouteChanged, setDirection, filterStops } from "./features/route-browser.js";
 import { renderDestSuggestions } from "./features/trip-finder/trip-finder.js";
 import {
@@ -28,7 +27,6 @@ registerActions({
 await mountSections(import.meta.url);
 bindLoginModalKeys();
 
-// Chọn sidebar theo vai trò, nạp dữ liệu bản đồ & kết nối realtime (không yêu cầu đăng nhập)
+// Chọn sidebar theo vai trò, nạp dữ liệu bản đồ & kết nối realtime theo vai trò (không yêu cầu đăng nhập)
 await createBaseMap();
 initSidebarForRole();
-initSocketRealtime();
