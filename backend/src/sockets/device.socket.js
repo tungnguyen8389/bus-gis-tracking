@@ -8,18 +8,19 @@ const WARN_INTERVAL_MS = 10000;
 // NAMESPACE /device: thiết bị của tài xế (điện thoại hoặc simulator) phát GPS.
 // Danh tính xe lấy từ phiên đã xác thực; client chỉ gửi vị trí.
 // --------------------------------------------------------------------
-function registerDeviceSocket(io, { db, jwtSecret, broadcaster, trackingLog, now = Date.now }) {
+function registerDeviceSocket(io, { db, jwtSecret, broadcaster, trackingLog, registry, now = Date.now }) {
   const devices = io.of("/device");
   const activeDevices = new Map(); // vehicle_id → socket đang giữ xe (mỗi xe 1 phiên)
-  const onMap = new Set();         // vehicle_id đang hiện trên bản đồ công khai (đã phát vị trí, chưa phát offline)
+  // vehicle_id → schedule_id đang chạy. Theo XE, không theo phiên: phiên bị thay thì handler
+  // disconnect của phiên cũ thoát sớm, nên chuyến phải được kết thúc từ đây.
+  const liveTrips = new Map();
 
-  const publishLocation = packet => {
-    onMap.add(packet.vehicle_id);
-    broadcaster.publishLocation(packet);
-  };
-  const publishOffline = vehicleId => {
-    onMap.delete(vehicleId);
-    broadcaster.publishOffline(vehicleId);
+  const endLiveTrip = vehicleId => {
+    const scheduleId = liveTrips.get(vehicleId);
+    if (scheduleId === undefined) return;
+    liveTrips.delete(vehicleId);
+    registry.end(scheduleId);
+    broadcaster.publishOffline({ vehicle_id: vehicleId, schedule_id: scheduleId });
   };
 
   devices.use(createDeviceAuth({ db, jwtSecret }));
@@ -49,12 +50,27 @@ function registerDeviceSocket(io, { db, jwtSecret, broadcaster, trackingLog, now
         if (!schedule || schedule.vehicle_id !== vehicle.vehicle_id) {
           return reply({ ok: false, error: "SCHEDULE_NOT_ALLOWED" });
         }
+        // Phiên bị thay trong lúc chờ DB → không được ghi đè chuyến của phiên mới
+        if (activeDevices.get(vehicle.vehicle_id) !== socket) {
+          return reply({ ok: false, error: "SESSION_REPLACED" });
+        }
+
+        if (liveTrips.has(vehicle.vehicle_id) && liveTrips.get(vehicle.vehicle_id) !== schedule.schedule_id) {
+          endLiveTrip(vehicle.vehicle_id);
+        }
         socket.data.trip = {
           schedule_id: schedule.schedule_id,
           route_id: schedule.route_id,
           route_number: schedule.route_number,
           direction: schedule.direction
         };
+        registry.start({
+          schedule_id: schedule.schedule_id,
+          vehicle_id: vehicle.vehicle_id,
+          route_id: schedule.route_id,
+          direction: schedule.direction
+        });
+        liveTrips.set(vehicle.vehicle_id, schedule.schedule_id);
         reply({ ok: true, trip: socket.data.trip });
       } catch (err) {
         console.error("[device] trip:start lỗi:", err.message);
@@ -82,31 +98,31 @@ function registerDeviceSocket(io, { db, jwtSecret, broadcaster, trackingLog, now
       const packet = {
         vehicle_id: vehicle.vehicle_id,
         plate_number: vehicle.plate_number,
+        schedule_id: trip.schedule_id,
         route_id: trip.route_id,
         route_number: trip.route_number,
         direction: trip.direction,
         ...result.value,
         timestamp: new Date(t).toISOString()
       };
-      publishLocation(packet);
+      broadcaster.publishLocation(packet);
+      registry.recordPing(trip.schedule_id, result.value);
       trackingLog.record(packet);
     });
 
     socket.on("trip:end", (...args) => {
       const ack = args.find(a => typeof a === "function") || (() => {});
-      // Phiên thay thế có thể chưa có trip nhưng xe vẫn đang hiện trên bản đồ
-      if (socket.data.trip || onMap.has(vehicle.vehicle_id)) {
-        socket.data.trip = null;
-        publishOffline(vehicle.vehicle_id);
-      }
+      // Phiên thay thế có thể chưa có trip nhưng xe vẫn đang chạy chuyến của phiên cũ
+      socket.data.trip = null;
+      endLiveTrip(vehicle.vehicle_id);
       ack({ ok: true });
     });
 
     socket.on("disconnect", () => {
-      // Phiên đã bị thay thì xe vẫn đang chạy ở phiên mới → không báo offline
+      // Phiên đã bị thay thì xe vẫn đang chạy ở phiên mới → không kết thúc chuyến
       if (activeDevices.get(vehicle.vehicle_id) !== socket) return;
       activeDevices.delete(vehicle.vehicle_id);
-      if (socket.data.trip || onMap.has(vehicle.vehicle_id)) publishOffline(vehicle.vehicle_id);
+      endLiveTrip(vehicle.vehicle_id);
     });
   });
 }

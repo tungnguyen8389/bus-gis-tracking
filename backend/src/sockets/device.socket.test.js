@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
 const { io: ioClient } = require("socket.io-client");
 const { registerDeviceSocket } = require("./device.socket");
+const { createTripRegistry } = require("./trip-registry");
 
 const SECRET = "test-secret";
 const VEHICLES = [
@@ -13,14 +14,19 @@ const VEHICLES = [
 ];
 const SCHEDULES = [
   { schedule_id: 11, route_id: "R1", vehicle_id: "DRV_01", direction: 1, route_number: "08" },
+  { schedule_id: 12, route_id: "R1", vehicle_id: "DRV_01", direction: 2, route_number: "08" },
   { schedule_id: 22, route_id: "R2", vehicle_id: "DRV_02", direction: 2, route_number: "19" }
 ];
 
-// DB giả: chỉ trả lời 2 truy vấn mà handshake và trip:start dùng
+// DB giả: chỉ trả lời 2 truy vấn mà handshake và trip:start dùng; scheduleGate để làm chậm trip:start
+const gate = { schedule: null };
 const fakeDb = {
   async query(sql, params) {
     if (sql.includes("FROM vehicles")) return [VEHICLES.filter(v => v.driver_user_id === params[0])];
-    if (sql.includes("FROM schedules")) return [SCHEDULES.filter(s => s.schedule_id === params[0])];
+    if (sql.includes("FROM schedules")) {
+      if (gate.schedule) await gate.schedule;
+      return [SCHEDULES.filter(s => s.schedule_id === params[0])];
+    }
     throw new Error(`SQL không mong đợi: ${sql}`);
   }
 };
@@ -35,10 +41,11 @@ async function startServer() {
   const published = { locations: [], offline: [] };
   const broadcaster = {
     publishLocation: p => published.locations.push(p),
-    publishOffline: id => published.offline.push(id)
+    publishOffline: o => published.offline.push(o)
   };
+  const registry = createTripRegistry({ now: () => clock.t });
   registerDeviceSocket(io, {
-    db: fakeDb, jwtSecret: SECRET, broadcaster,
+    db: fakeDb, jwtSecret: SECRET, broadcaster, registry,
     trackingLog: { record: async () => true },
     now: () => clock.t
   });
@@ -51,7 +58,7 @@ async function startServer() {
     return s;
   };
   const close = () => { clients.forEach(c => c.disconnect()); return new Promise(r => io.close(r)); };
-  return { connect, published, clock, close };
+  return { connect, published, clock, registry, close };
 }
 
 const waitConnect = s => new Promise((resolve, reject) => {
@@ -108,6 +115,8 @@ test("ping hợp lệ → server dựng gói theo xe đã xác thực, bỏ vehi
   assert.equal(p.longitude, 106.7);
   assert.equal(p.speed_kmh, 30);
   assert.equal(p.heading, 45);
+  assert.equal(p.schedule_id, 11);
+  assert.equal(srv.registry.get(11).last_position.latitude, 10.8);
   assert.equal(p.timestamp, new Date(srv.clock.t).toISOString());
 });
 
@@ -147,7 +156,7 @@ test("trip:end → phát vehicle_offline", async t => {
   const s = srv.connect(driverToken(1)); await waitConnect(s);
   await startTrip(s, 11);
   assert.deepEqual(await s.timeout(2000).emitWithAck("trip:end", {}), { ok: true });
-  assert.deepEqual(srv.published.offline, ["DRV_01"]);
+  assert.deepEqual(srv.published.offline, [{ vehicle_id: "DRV_01", schedule_id: 11 }]);
 });
 
 test("ngắt kết nối khi đang có trip → phát vehicle_offline", async t => {
@@ -156,7 +165,7 @@ test("ngắt kết nối khi đang có trip → phát vehicle_offline", async t 
   await startTrip(s, 11);
   s.disconnect();
   await tick();
-  assert.deepEqual(srv.published.offline, ["DRV_01"]);
+  assert.deepEqual(srv.published.offline, [{ vehicle_id: "DRV_01", schedule_id: 11 }]);
 });
 
 test("phiên mới thay phiên cũ rồi ngắt khi chưa trip:start → vẫn gỡ xe khỏi bản đồ đúng 1 lần", async t => {
@@ -175,7 +184,7 @@ test("phiên mới thay phiên cũ rồi ngắt khi chưa trip:start → vẫn g
 
   b.disconnect();
   await tick();
-  assert.deepEqual(srv.published.offline, ["DRV_01"]);
+  assert.deepEqual(srv.published.offline, [{ vehicle_id: "DRV_01", schedule_id: 11 }]);
 });
 
 test("phiên thay thế gọi trip:end khi chưa trip:start → gỡ xe khỏi bản đồ, ngắt sau đó không phát lại", async t => {
@@ -189,7 +198,7 @@ test("phiên thay thế gọi trip:end khi chưa trip:start → gỡ xe khỏi b
   assert.deepEqual(await b.timeout(2000).emitWithAck("trip:end", {}), { ok: true });
   b.disconnect();
   await tick();
-  assert.deepEqual(srv.published.offline, ["DRV_01"]);
+  assert.deepEqual(srv.published.offline, [{ vehicle_id: "DRV_01", schedule_id: 11 }]);
 });
 
 test("kết nối rồi ngắt mà chưa từng phát vị trí → không phát vehicle_offline", async t => {
@@ -198,4 +207,71 @@ test("kết nối rồi ngắt mà chưa từng phát vị trí → không phát
   s.disconnect();
   await tick();
   assert.deepEqual(srv.published.offline, []);
+});
+
+test("trip:start đăng ký chuyến vào registry; trip:end gỡ khỏi registry", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const s = srv.connect(driverToken(1)); await waitConnect(s);
+  await startTrip(s, 11);
+  assert.equal(srv.registry.has(11), true);
+  await s.timeout(2000).emitWithAck("trip:end", {});
+  assert.equal(srv.registry.has(11), false);
+});
+
+test("trip:start chuyến khác khi xe đang chạy → kết thúc chuyến cũ, offline vào room chuyến cũ", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const s = srv.connect(driverToken(1)); await waitConnect(s);
+  await startTrip(s, 11);
+  const ack = await startTrip(s, 12);
+  assert.equal(ack.ok, true);
+  assert.deepEqual(srv.published.offline, [{ vehicle_id: "DRV_01", schedule_id: 11 }]);
+  assert.equal(srv.registry.has(11), false);
+  assert.equal(srv.registry.has(12), true);
+  srv.clock.t += 1000;
+  s.emit("gps_ping", { latitude: 10.8, longitude: 106.7 });
+  await tick();
+  assert.equal(srv.published.locations[0].schedule_id, 12);
+});
+
+test("phiên thay thế gửi lại cùng chuyến → giữ nguyên bản ghi registry (không mất mẫu vận tốc)", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const a = srv.connect(driverToken(1)); await waitConnect(a);
+  await startTrip(a, 11);
+  a.emit("gps_ping", { latitude: 10.8, longitude: 106.7 });
+  await tick();
+  const before = srv.registry.get(11);
+  const b = srv.connect(driverToken(1)); await waitConnect(b);
+  await startTrip(b, 11);
+  assert.equal(srv.registry.get(11), before);
+  assert.deepEqual(srv.published.offline, []);
+});
+
+test("phiên bị thay rồi ngắt trước trip:start → chuyến kết thúc đúng 1 lần, registry sạch", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const a = srv.connect(driverToken(1)); await waitConnect(a);
+  await startTrip(a, 11);
+  const b = srv.connect(driverToken(1)); await waitConnect(b);
+  await tick();
+  b.disconnect();
+  await tick();
+  assert.deepEqual(srv.published.offline, [{ vehicle_id: "DRV_01", schedule_id: 11 }]);
+  assert.equal(srv.registry.has(11), false);
+});
+
+test("Review focus: phiên bị thay khi trip:start đang chờ DB → SESSION_REPLACED, không ghi registry", async t => {
+  const srv = await startServer(); t.after(() => { gate.schedule = null; return srv.close(); });
+  const a = srv.connect(driverToken(1)); await waitConnect(a);
+  let release;
+  gate.schedule = new Promise(r => { release = r; });
+  const pending = a.timeout(2000).emitWithAck("trip:start", { schedule_id: 11 }).catch(e => ({ error: e.message }));
+  await tick();
+  const b = srv.connect(driverToken(1)); await waitConnect(b);
+  await tick();
+  release();
+  gate.schedule = null;
+  const ack = await pending;
+  await tick(); // chờ handler trip:start phía server chạy tiếp sau khi nhả gate
+  // Phiên cũ đã bị ngắt nên có thể không nhận được ack; điều quan trọng là registry không bị ghi
+  assert.ok(ack.error !== undefined || ack.ok === false);
+  assert.equal(srv.registry.has(11), false);
 });
