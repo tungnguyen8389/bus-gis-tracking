@@ -135,12 +135,7 @@ test("lỗi nạp hình học xóa cache, lần sau retry thành công", async (
   const lister = createTripLister({ db, registry, now: () => clock.t });
 
   // Lần đầu: lỗi
-  try {
-    await lister.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
-    assert.fail("Không nên thành công");
-  } catch {
-    // Kỳ vọng lỗi
-  }
+  await assert.rejects(lister.list({ route_id: "R1", direction: 1, board_stop_id: "S2" }));
 
   // Lần hai: throwPathsError giả bị tắt (calls.paths = 2), thành công
   const trips = await lister.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
@@ -172,16 +167,20 @@ test("xe đang chạy chiều khác lỗi nạp hình học không làm fail lis
 test("tuyến không có lộ trình được re-query lần sau", async () => {
   const clock = { t: VN_10H };
   const registry = createTripRegistry({ now: () => clock.t });
+  const paths = {}; // Mutable fixture, bắt đầu trống
+  const { db, calls } = makeDb({ paths });
+  const lister = createTripLister({ db, registry, now: () => clock.t });
 
   // Lần đầu: R1|1 không có lộ trình
-  const { db: db1, calls: calls1 } = makeDb({ paths: {} });
-  const lister1 = createTripLister({ db: db1, registry, now: () => clock.t });
-  await lister1.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
-  assert.equal(calls1.paths, 1);
+  let trips = await lister.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
+  assert.equal(calls.paths, 1);
+  assert.ok(trips.every(t => t.eta_board === null)); // Không ETA vì không có hình học
 
-  // Lần hai: lấy R1|1 từ PATHS (đã có)
-  const { db: db2, calls: calls2 } = makeDb();
-  const lister2 = createTripLister({ db: db2, registry, now: () => clock.t });
-  await lister2.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
-  assert.equal(calls2.paths, 1); // Lấy từ DB, không cache null từ lần trước
+  // Thêm lộ trình vào fixture
+  paths["R1|1"] = PATHS["R1|1"];
+
+  // Lần hai: cache bị xóa (null), re-query và nạp hình học thành công
+  trips = await lister.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
+  assert.equal(calls.paths, 2);
+  assert.ok(trips.some(t => t.eta_board !== null)); // Có ETA vì hình học được nạp
 });
