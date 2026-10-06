@@ -169,3 +169,48 @@ test("chưa tới giờ chuyến kế tiếp → tick phát gps_ping như thư�
   assert.equal(calls.emits[0][0], "gps_ping");
   await driver.stop(false);
 });
+
+test("đổi chuyến gặp 401 (token hết hạn) → đăng nhập lại, cập nhật socket.auth, lượt sau đổi chuyến thành công", async t => {
+  mockTimers(t);
+  let nowMs = Date.UTC(2026, 9, 5, 3, 0, 0);   // 10:00 VN
+  const { driver, calls } = makeDriver([OK_ACK], { now: () => nowMs });
+  const first = { schedule_id: 1, route_id: "R", direction: 1, departure_time: "09:00" };
+  const second = { schedule_id: 2, route_id: "R", direction: 2, departure_time: "10:00" };
+  driver.schedules = [first, second];
+  driver.schedule = first;
+  driver.trip = { route_number: "01", direction: 1 };
+  driver.route = require("./route-geometry").processRouteGeometry([[106.70, 10.8], [106.71, 10.8]]);
+  driver.distance = 0;
+  driver.baseSpeed = 30;
+  let logins = 0;
+  driver.login = async () => { logins++; driver.token = "fresh"; };
+  let apiCalls = 0;
+  driver.api = async () => {
+    if (apiCalls++ === 0) throw Object.assign(new Error("GET /routes → 401"), { status: 401, fatal: true });
+    return { geometry: { type: "LineString", coordinates: [[106.70, 10.8], [106.71, 10.8]] } };
+  };
+
+  driver.tick();
+  await flush();
+  await flush();
+  assert.equal(logins, 1);
+  assert.equal(driver.socket.auth.token, "fresh");
+  assert.equal(driver.schedule, first);
+  assert.equal(driver.stopped, false);
+
+  driver.tick();                               // chưa hết RETRY_MS → không nạp lại lộ trình, vẫn chạy chuyến cũ
+  await flush();
+  assert.equal(apiCalls, 1);
+  assert.equal(driver.schedule, first);
+  calls.emits.length = 0;
+
+  nowMs += RETRY_MS;
+  driver.tick();
+  await flush();
+  await flush();
+  assert.equal(driver.schedule, second);
+  assert.deepEqual(calls.acks[0], ["trip:start", { schedule_id: 2 }]);
+  assert.equal(logins, 1);
+  await driver.stop(false);
+});
+

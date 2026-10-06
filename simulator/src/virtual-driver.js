@@ -64,6 +64,16 @@ class VirtualDriver {
     return processRouteGeometry(coords);
   }
 
+  // Token hết hạn (401) khi socket vẫn nối → đăng nhập lại; lỗi thì chờ lượt thử sau, không dừng tài xế
+  async refreshToken() {
+    try {
+      await this.login();
+      if (this.socket) this.socket.auth.token = this.token;
+    } catch (e) {
+      if (!this.stopped) this.log(`${this.username}: đăng nhập lại thất bại (${e.message}) → thử lại sau`);
+    }
+  }
+
   // Tới giờ xuất bến chuyến kế tiếp → chạy từ đầu lộ trình chiều mới; server tự kết thúc chuyến cũ
   async switchTrip(next) {
     this.switching = true;
@@ -78,8 +88,10 @@ class VirtualDriver {
       this.log(`${this.username}: tới giờ chuyến ${next.departure_time} → đổi chuyến`);
       await this.beginTrip();
     } catch (err) {
+      if (this.stopped) return;
       this.nextSwitchAttemptAt = this.now() + RETRY_MS;
       this.log(`${this.username}: không nạp được lộ trình chuyến mới (${err.message}) → thử lại sau ${RETRY_MS / 1000}s`);
+      if (err.status === 401) await this.refreshToken();
     } finally {
       this.switching = false;
     }
@@ -100,6 +112,7 @@ class VirtualDriver {
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       const error = new Error(`${method} ${path} → ${res.status} ${data?.error || ""}`.trim());
+      error.status = res.status;
       error.fatal = res.status >= 400 && res.status < 500;
       throw error;
     }
