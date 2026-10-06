@@ -153,7 +153,7 @@ function renderTrackedVehicle(data, rName) {
 function onFleetLocationUpdate(data) {
   if (!data || !data.vehicle_id || !map.fleetLayer) return;
   // Khách chỉ hiện đúng chuyến đang theo dõi (server đã lọc theo room; chặn thêm ở client)
-  if (!state.isStaff && data.schedule_id !== state.watchedScheduleId) return;
+  if (!state.isStaff && (state.watchedScheduleId == null || data.schedule_id !== state.watchedScheduleId)) return;
   const busGraphics = state.busGraphics;
   const mapView = map.view;
 
