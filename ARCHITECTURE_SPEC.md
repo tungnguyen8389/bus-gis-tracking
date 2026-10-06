@@ -2,7 +2,7 @@
 ## ĐỀ TÀI: QUẢN LÝ VÀ GIÁM SÁT HÀNH TRÌNH XE BUÝT 2D TRÊN NỀN WEB GIS
 
 > **Lưu ý:** Tài liệu này là bản tổng hợp mã nguồn giai đoạn đầu, chưa cập nhật theo cấu trúc hiện tại.
-> Hub realtime nay nằm ở `backend/src/sockets/` (namespace `/` chỉ nhận, `/device` cho tài xế đã xác thực).
+> Hub realtime nay nằm ở `backend/src/sockets/`: `/device` cho tài xế đã xác thực phát GPS; `/` phát theo room (`trip:<schedule_id>` cho khách đã chọn chuyến, `vehicle:<id>` cho trang tài xế, `staff` cho nhân viên, `route:<id>:<dir>` cho danh sách chuyến + ETA). Mã `io.emit` bên dưới là phiên bản cũ, giữ để đối chiếu.
 > Bộ giả lập đã tách thành thư mục độc lập `simulator/`.
 > Xem [README.md](README.md) và [docs/superpowers/specs/2026-10-04-socket-security-driver-design.md](docs/superpowers/specs/2026-10-04-socket-security-driver-design.md).
 

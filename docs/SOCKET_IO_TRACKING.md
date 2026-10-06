@@ -20,6 +20,22 @@ driver.html (GPS điện thoại) ┐                              ┌─► "/"
 simulator/ (tài xế ảo)       ┘  trip:start · gps_ping · trip:end            └─► tracking-log.js (≤ 1 bản ghi / xe / 5 s)
 ```
 
+## Kiến trúc sau "khách theo dõi 1 chuyến"
+
+```
+                                             ┌─► room trip:<schedule_id>  ─► khách đã trip:watch (đúng 1 xe)
+"/device" ─► device.socket.js ─► broadcaster ┼─► room vehicle:<vehicle_id> ─► trang tài xế (token DRIVER)
+             │                               └─► room staff               ─► nhân viên (token ADMIN/MANAGER)
+             └─► trip-registry.js (chuyến đang chạy + mẫu vận tốc) ─► trip-list.js (ETA) ─► room route:<id>:<dir> ─► trips:update
+```
+
+| Sự kiện client → "/" | Ack |
+|---|---|
+| `trips:subscribe {route_id, direction, board_stop_id?}` | `{ok, trips}` / `BAD_REQUEST` / `SERVER_ERROR` |
+| `trips:unsubscribe` | — |
+| `trip:watch {schedule_id}` | `{ok, status}` / `TRIP_NOT_AVAILABLE` / `SERVER_ERROR` |
+| `trip:unwatch` | — |
+
 | Thành phần | File |
 |---|---|
 | Khởi tạo Socket server | [backend/server.js](../backend/server.js) |
@@ -31,6 +47,9 @@ simulator/ (tài xế ảo)       ┘  trip:start · gps_ping · trip:end       
 | Client thiết bị (trang tài xế) | [frontend/src/modules/realtime/device.service.js](../frontend/src/modules/realtime/device.service.js), [phone-gps.js](../frontend/src/views/driver/features/phone-gps.js) |
 | Render đội xe trên bản đồ | [frontend/src/views/map/features/fleet-tracking.js](../frontend/src/views/map/features/fleet-tracking.js) |
 | Test socket | [device.socket.test.js](../backend/src/sockets/device.socket.test.js), [backend/test_suite.js](../backend/test_suite.js) (module 4) |
+| Registry chuyến + ETA | [trip-registry.js](../backend/src/sockets/trip-registry.js), [trip-list.js](../backend/src/sockets/trip-list.js), [eta.js](../backend/src/sockets/eta.js), [route-geometry.js](../backend/src/sockets/route-geometry.js) |
+| Khách theo dõi chuyến | [trip-watch.js](../frontend/src/views/map/features/trip-finder/trip-watch.js) |
+| Test viewer | [viewer.socket.test.js](../backend/src/sockets/viewer.socket.test.js) |
 
 Số liệu DB thật lúc rà soát: `vehicles` = 0, `schedules` = 0, `route_paths` = 332 (đều LINESTRING), `vehicle_tracking_logs` = 0.
 
@@ -43,8 +62,8 @@ Số liệu DB thật lúc rà soát: `vehicles` = 0, `schedules` = 0, `route_pa
 | 1 | 🔴 | Socket không xác thực, ai cũng giả mạo được GPS | A. Bảo mật | DONE |
 | 2 | 🔴 | Log hành trình không bao giờ ghi được (lỗi FK, nuốt lỗi) | D. Lưu log | DOING |
 | 3 | 🔴 | Không validate payload `gps_ping` | A. Bảo mật | DONE |
-| 4 | 🟠 | Broadcast toàn bộ xe tới mọi client (~1.3k–2k emit/s) | B. Server realtime | TODO |
-| 5 | 🟡 | Lọc xe chỉ theo `route_id`, bỏ qua `direction` | C. Client | TODO |
+| 4 | 🟠 | Broadcast toàn bộ xe tới mọi client (~1.3k–2k emit/s) | B. Server realtime | DONE |
+| 5 | 🟡 | Lọc xe chỉ theo `route_id`, bỏ qua `direction` (khách: không còn — mỗi chuyến 1 chiều) | C. Client | TODO |
 | 6 | 🟡 | "Trạm tiếp theo" thực ra là trạm gần nhất | C. Client | TODO |
 | 7 | 🟡 | Server không lưu vị trí cuối, client mới vào thấy bản đồ trống | B. Server realtime | TODO |
 | 8 | 🟡 | Xe ma: xe ngừng phát vẫn đứng trên bản đồ, cache phình to | B. Server realtime | DOING |
@@ -89,17 +108,13 @@ Số liệu DB thật lúc rà soát: `vehicles` = 0, `schedules` = 0, `route_pa
 
 > Ba vấn đề #4, #7, #8 cùng đụng vào `viewer.socket.js` / `device.socket.js`, nên sửa chung một lượt.
 
-### #4 🟠 Broadcast toàn bộ xe tới mọi client — `TODO`
+### #4 🟠 Broadcast toàn bộ xe tới mọi client — `DONE`
 
-- **Vị trí:** [viewer.socket.js](../backend/src/sockets/viewer.socket.js) (`publishLocation` phát tới mọi viewer), [simulator/src/virtual-driver.js](../simulator/src/virtual-driver.js) (1 gói / xe / tick)
+- **Vị trí:** [viewer.socket.js](../backend/src/sockets/viewer.socket.js), [broadcaster.js](../backend/src/sockets/broadcaster.js) (phát theo room), [trip-registry.js](../backend/src/sockets/trip-registry.js), [simulator/src/virtual-driver.js](../simulator/src/virtual-driver.js)
 - **Vấn đề:** 332 lộ trình × 2–3 xe tự sinh × 2 Hz ≈ 1.3k–2k emit/giây tới mỗi client, kèm số INSERT tương đương. Client nhận hết rồi mới lọc. Đây là lý do simulator cũ bị tắt; simulator mới (`simulator/`) chỉ chạy số tài xế seed (mặc định 5).
-- **Hướng sửa:**
-  - [ ] Room theo `route:<route_id>:<direction>`. Client gửi `subscribe_route`/`unsubscribe_route` khi đổi tuyến hoặc chiều.
-  - [ ] Chế độ "ALL": server gom snapshot và phát `fleet_snapshot` 1–2 giây/lần thay vì từng xe.
-  - [ ] Simulator gửi `gps_batch` (một mảng mỗi tick) thay vì một gói mỗi xe.
-  - [ ] Dùng `io.volatile` cho cập nhật vị trí, để bỏ gói cũ khi client chậm.
-  - [ ] Tăng `--count` của simulator (`cd simulator && npm start -- --count N`) sau khi xong.
-- **Kiểm chứng:** Chọn một tuyến thì DevTools → WS chỉ thấy gói của tuyến và chiều đó.
+- **Đã sửa:** device phát vào room `trip:<schedule_id>`, `vehicle:<vehicle_id>`, `staff` thay vì mọi viewer. Khách chỉ nhận chuyến đã `trip:watch` (1 chuyến/socket); danh sách chuyến của tuyến đi qua `trips:subscribe` và không chứa tọa độ.
+- **Còn lại (chưa làm):** `gps_batch` cho simulator, `io.volatile`, snapshot cho nhân viên ở chế độ "ALL".
+- **Kiểm chứng:** Chọn một tuyến thì DevTools → WS chỉ thấy gói của tuyến và chiều đó; khách chọn chuyến thì chỉ thấy xe đó.
 
 ### #7 🟡 Không lưu vị trí cuối trên server — `TODO`
 
@@ -206,3 +221,4 @@ Số liệu DB thật lúc rà soát: `vehicles` = 0, `schedules` = 0, `route_pa
 |---|---|---|---|
 | 2026-10-04 | — | Tạo tài liệu sau khi rà soát | — |
 | 2026-10-04 | #1 #3 #11 #12 #13, một phần #2 #8 | Namespace /device có JWT tài xế, validate + rate limit, một xe một phiên, vehicle_offline, log có throttle; tài khoản tài xế + seed; simulator độc lập; trang driver.html | nhánh `feat/socket-security-driver` |
+| 2026-10-05 | #4, #5 (khách) | Room theo chuyến/xe/staff; khách chọn tuyến → chọn chuyến → thấy đúng 1 xe; ETA tới trạm lên theo vận tốc thực tế, đẩy qua socket; seed 4 tài xế/tuyến; simulator tự đổi chuyến | nhánh `feat/guest-trip-tracking` |

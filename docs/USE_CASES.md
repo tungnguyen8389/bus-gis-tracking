@@ -209,21 +209,24 @@ flowchart LR
 
 #### UC-05 — Theo dõi xe buýt realtime
 
-- **Tác nhân:** Khách, Nhân viên (không phân quyền).
-- **Mục tiêu:** Thấy vị trí các xe buýt đang chạy và thông số của một xe cụ thể.
-- **Tiền điều kiện:** Backend đang chạy và có **Nguồn GPS** đang gửi `gps_ping` (UC-19). Nếu không có nguồn GPS, bản đồ không có xe nào.
-- **Luồng chính:**
-  1. Trang kết nối Socket.io tới `http://localhost:3000`; nhãn trạng thái chuyển **ONLINE**.
-  2. Mỗi gói `fleet_location_update` tạo mới hoặc cập nhật marker đỏ của xe. Xe di chuyển mượt bằng nội suy tuyến tính trong 500 ms (khớp chu kỳ phát). Nếu xe nhảy quá ~500 m (VD quay về đầu tuyến) thì đặt thẳng vào vị trí mới.
-  3. Xe đầu tiên nhận được tự động trở thành **xe đang theo dõi**. Người dùng có thể bấm vào xe khác trên bản đồ để đổi xe theo dõi (toast "🎯 Đang theo dõi xe buýt: …").
-  4. Bảng **"Theo dõi xe"** bên phải hiển thị tuyến, biển số, tốc độ, tọa độ GPS và **"Trạm tiếp theo sắp tới"** của xe đang theo dõi.
-  5. Bấm vào xe để mở popup (biển số, tuyến, vận tốc, hướng); popup di chuyển theo xe và tự làm mới số liệu.
-- **Luồng thay thế:** Khi đang chọn một tuyến (UC-04 hoặc UC-07), xe của tuyến khác bị ẩn.
+- **Tác nhân:** Khách, Nhân viên.
+- **Mục tiêu:** Khách theo dõi đúng chuyến xe mình định đi và biết khi nào xe tới trạm; nhân viên giám sát toàn đội xe.
+- **Tiền điều kiện:** Backend đang chạy và có **Nguồn GPS** (UC-19, UC-23). Có lịch trình (`schedules`) cho tuyến.
+- **Luồng chính (Khách):**
+  1. Mở bản đồ: không có xe nào, bảng "Theo dõi xe" ẩn.
+  2. Tìm tuyến (UC-03) rồi bấm một thẻ tuyến: bản đồ chỉ vẽ lộ trình; dưới thẻ hiện danh sách chuyến **đang chạy** và **sắp tới** (giờ xuất bến trong 2 giờ tới, hoặc trễ ≤ 15 phút), mỗi dòng có giờ xuất bến, biển số, tài xế, nhãn trạng thái và **ETA tới trạm lên** (`~HH:MM (X phút)`).
+  3. Bấm một chuyến: bản đồ hiện **đúng 1 xe** của chuyến đó; bảng "Theo dõi xe" hiện tuyến, biển số, tài xế, tốc độ, giờ xuất bến và ETA.
+  4. ETA và trạng thái tự cập nhật (server đẩy `trips:update` mỗi 15 giây và ngay khi chuyến bắt đầu/kết thúc).
+- **Luồng chính (Nhân viên):** đăng nhập (UC-06) → thấy mọi xe đang chạy; chọn tuyến (UC-07) để lọc.
+- **Luồng thay thế:**
+  - Chọn chuyến chưa xuất bến → bảng ghi "Chưa xuất bến — dự kiến HH:MM"; xe tự hiện khi tài xế bắt đầu chuyến.
+  - Xe đã qua trạm lên → dòng mờ "Đã qua trạm của bạn", không chọn được; nếu đang theo dõi thì bảng ghi "Xe đã qua trạm của bạn".
+  - Khách không bật định vị (không có trạm lên) → danh sách không có ETA.
 - **Luồng ngoại lệ:**
-  - Mất kết nối → nhãn **OFFLINE**; Socket.io tự kết nối lại.
-  - Không có nguồn GPS → bản đồ không có xe, nhưng bảng "Theo dõi xe" vẫn hiện giá trị mẫu cố định trong HTML ("Tuyến 08", "51B-123.45", "32 km/h", "Trạm ĐH Khoa học Tự nhiên") cho tới khi nhận gói GPS đầu tiên.
-- **Ghi chú:** "Trạm tiếp theo" thực chất là trạm **gần xe nhất** (khoảng cách Euclid theo độ) trong danh sách trạm đang hiển thị, và chỉ được cập nhật khi danh sách đó có dữ liệu — thường là sau khi nhân viên chọn tuyến (UC-07).
-- **Code:** [fleet-tracking.js](../frontend/src/views/map/features/fleet-tracking.js), [realtime.service.js](../frontend/src/modules/realtime/realtime.service.js).
+  - Mất kết nối → nhãn **OFFLINE**; kết nối lại thì tự đăng ký lại danh sách và chuyến đang theo dõi.
+  - Chuyến kết thúc / không còn công khai → gỡ xe, bảng ghi "Chuyến đã kết thúc".
+- **Ghi chú:** ETA = quãng đường dọc lộ trình tới trạm lên ÷ vận tốc thực tế của xe (quãng đã đi trong 5 phút gần nhất, kẹp 5–60 km/h). Chuyến sắp tới dùng vận tốc trung bình của các xe đang chạy cùng tuyến (mặc định 20 km/h).
+- **Code:** [trip-watch.js](../frontend/src/views/map/features/trip-finder/trip-watch.js), [trip-finder.js](../frontend/src/views/map/features/trip-finder/trip-finder.js), [fleet-tracking.js](../frontend/src/views/map/features/fleet-tracking.js), [viewer.socket.js](../backend/src/sockets/viewer.socket.js), [trip-list.js](../backend/src/sockets/trip-list.js).
 
 #### UC-06 — Đăng nhập / đăng xuất nhân viên
 

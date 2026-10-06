@@ -22,7 +22,7 @@ Bus_project/
 │   │   ├── modules/                # Mỗi feature: <tên>.routes.js + <tên>.controller.js (+ .service.js)
 │   │   │   ├── auth/  driver/  users/  bus-routes/  paths/  stops/  trip-plan/
 │   │   │   └── vehicles/  schedules/  admin-stats/  import-export/
-│   │   └── sockets/                # index.js, viewer.socket.js ("/" chỉ nhận), device.socket.js + device.auth.js ("/device" tài xế), gps.validate.js, tracking-log.js
+│   │   └── sockets/                # index.js, viewer.socket.js ("/" theo room: trip/vehicle/staff/route), device.socket.js + device.auth.js ("/device" tài xế), trip-registry.js, trip-list.js, eta.js, route-geometry.js, gps.validate.js, tracking-log.js
 │   └── scripts/                    # db:import / db:export busdata.sql, db:seed-drivers (tài xế demo)
 ├── docs/
 │   └── NODEJS_VS_LARAVEL_ANALYSIS.md # Phân tích so sánh công nghệ Backend (Node.js vs Laravel)
@@ -88,8 +88,12 @@ npm start
 GPS chỉ được phát bởi **tài xế đã đăng nhập** (namespace Socket.io `/device`, JWT role `DRIVER`). Bản đồ chỉ nhận dữ liệu.
 
 ```bash
-cd backend && npm run db:seed-drivers -- --count 20   # driver01..driver20 / mật khẩu driver123, xe DRV_01..DRV_20
+cd backend && npm run db:seed-drivers -- --count 20   # driver01..driver20 / mật khẩu driver123, xe DRV_01..DRV_20, 4 tài xế/tuyến → 5 tuyến
 ```
+
+Mỗi tài xế có 17 chuyến/ngày (05:00 + slot×15' + k×60'), đổi chiều sau mỗi chuyến: mỗi tuyến có chuyến 15 phút một lần, mỗi chiều trung bình 30 phút một lần. Simulator chọn chuyến theo giờ Việt Nam và tự đổi chuyến khi tới giờ xuất bến.
+
+**Bản đồ công khai:** khách chưa chọn tuyến thì không thấy xe nào. Chọn điểm đến → bấm thẻ tuyến → danh sách chuyến đang chạy/sắp tới kèm ETA tới trạm lên → bấm 1 chuyến để thấy đúng xe đó. Nhân viên đăng nhập thấy toàn đội xe.
 
 Backend tự bổ sung vai trò `DRIVER` và cột `vehicles.driver_user_id` khi khởi động (idempotent), nên DB production không cần chạy seed demo chỉ để migrate.
 
