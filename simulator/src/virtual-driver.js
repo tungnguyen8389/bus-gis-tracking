@@ -1,5 +1,6 @@
 const { io } = require("socket.io-client");
 const { processRouteGeometry, getInterpolatedPosition } = require("./route-geometry");
+const { toMinutes, vnMinutesOfDay, pickSchedule, nextSchedule } = require("./schedule");
 
 const TICK_MS = 500;
 const RETRY_MS = 5000;
@@ -9,13 +10,15 @@ const RETRY_MS = 5000;
 // Chỉ dùng API public; không đọc CSDL, không import code backend.
 // --------------------------------------------------------------------
 class VirtualDriver {
-  constructor({ apiUrl, username, password, log = msg => console.log(`>>> [Simulator] ${msg}`) }) {
-    Object.assign(this, { apiUrl, username, password, log });
+  constructor({ apiUrl, username, password, log = msg => console.log(`>>> [Simulator] ${msg}`), now = Date.now }) {
+    Object.assign(this, { apiUrl, username, password, log, now });
     this.stopped = false;
     this.socket = null;
     this.timer = null;
     this.trip = null;
     this.relogged = false;
+    this.switching = false;
+    this.nextSwitchAttemptAt = 0;
   }
 
   async start() {
@@ -24,13 +27,11 @@ class VirtualDriver {
       await this.login();
       const me = await this.api("/driver/me");
       this.plate = me.vehicle.plate_number;
-      this.schedule = me.schedules[0];
+      this.schedules = me.schedules;
+      this.schedule = pickSchedule(this.schedules, vnMinutesOfDay(this.now()));
       if (!this.schedule) return this.fail("xe chưa có lịch trình");
 
-      const { route_id, direction } = this.schedule;
-      const path = await this.api(`/routes/${encodeURIComponent(route_id)}/path?direction=${direction}`);
-      const coords = path.geometry.type === "MultiLineString" ? path.geometry.coordinates.flat() : path.geometry.coordinates;
-      this.route = processRouteGeometry(coords);
+      this.route = await this.fetchRoute(this.schedule);
       if (!this.route) return this.fail("lộ trình không hợp lệ");
 
       // Xuất phát ở vị trí ngẫu nhiên để các xe không chồng lên nhau
@@ -55,6 +56,33 @@ class VirtualDriver {
 
   api(path) {
     return this.fetchJson(path, { token: this.token });
+  }
+
+  async fetchRoute({ route_id, direction }) {
+    const path = await this.api(`/routes/${encodeURIComponent(route_id)}/path?direction=${direction}`);
+    const coords = path.geometry.type === "MultiLineString" ? path.geometry.coordinates.flat() : path.geometry.coordinates;
+    return processRouteGeometry(coords);
+  }
+
+  // Tới giờ xuất bến chuyến kế tiếp → chạy từ đầu lộ trình chiều mới; server tự kết thúc chuyến cũ
+  async switchTrip(next) {
+    this.switching = true;
+    try {
+      const route = await this.fetchRoute(next);
+      if (this.stopped) return;
+      if (!route) {
+        this.nextSwitchAttemptAt = this.now() + RETRY_MS;
+        return this.log(`${this.username}: lộ trình chuyến ${next.departure_time} không hợp lệ → thử lại sau`);
+      }
+      Object.assign(this, { schedule: next, route, distance: 0, trip: null });
+      this.log(`${this.username}: tới giờ chuyến ${next.departure_time} → đổi chuyến`);
+      await this.beginTrip();
+    } catch (err) {
+      this.nextSwitchAttemptAt = this.now() + RETRY_MS;
+      this.log(`${this.username}: không nạp được lộ trình chuyến mới (${err.message}) → thử lại sau ${RETRY_MS / 1000}s`);
+    } finally {
+      this.switching = false;
+    }
   }
 
   // Lỗi 4xx đánh dấu fatal (sai tài khoản / chưa gán xe) → bỏ tài xế; lỗi mạng / 5xx → thử lại
@@ -145,7 +173,13 @@ class VirtualDriver {
   }
 
   tick() {
-    if (!this.trip || !this.socket?.connected) return;
+    if (!this.trip || !this.socket?.connected || this.switching) return;
+    const next = this.schedules ? nextSchedule(this.schedules, this.schedule) : null;
+    const nowMs = this.now();
+    if (next && toMinutes(next.departure_time) <= vnMinutesOfDay(nowMs) && nowMs >= this.nextSwitchAttemptAt) {
+      this.switchTrip(next);
+      return;
+    }
     const speed = Math.max(15, this.baseSpeed + Math.sin(Date.now() / 5000) * 3);
     this.distance = (this.distance + (speed / 3.6) * (TICK_MS / 1000)) % this.route.totalDist;
     const pos = getInterpolatedPosition(this.route, this.distance);

@@ -7,22 +7,24 @@ const OK_ACK = { ok: true, trip: { route_number: "01", direction: 1 } };
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
 // Socket giả: mỗi lần emitWithAck lấy một kết quả trong kịch bản (Error thì ném lỗi như timeout)
-function makeDriver(script) {
-  const driver = new VirtualDriver({ apiUrl: "http://x", username: "driver01", password: "p", log: () => {} });
+function makeDriver(script, { now } = {}) {
+  const driver = new VirtualDriver({ apiUrl: "http://x", username: "driver01", password: "p", log: () => {}, now });
   driver.schedule = { schedule_id: 1 };
   driver.plate = "X";
-  const calls = { emitWithAck: 0, connect: 0 };
+  const calls = { emitWithAck: 0, connect: 0, acks: [], emits: [] };
   driver.socket = {
     connected: true,
     active: false,
     auth: {},
     timeout: () => ({
-      emitWithAck: async () => {
+      emitWithAck: async (...args) => {
+        calls.acks.push(args);
         const step = script[Math.min(calls.emitWithAck++, script.length - 1)];
         if (step instanceof Error) throw step;
         return step;
       }
     }),
+    emit: (...args) => calls.emits.push(args),
     connect: () => { calls.connect++; },
     disconnect: () => {}
   };
@@ -117,4 +119,53 @@ test("connect_error NO_VEHICLE → dừng hẳn", async t => {
   assert.equal(driver.stopped, true);
   t.mock.timers.tick(RETRY_MS * 2);
   assert.equal(calls.connect, 0);
+});
+
+test("tới giờ xuất bến chuyến kế tiếp → nạp lộ trình chiều mới, distance = 0, trip:start chuyến mới", async t => {
+  mockTimers(t);
+  const VN_10H = Date.UTC(2026, 9, 5, 3, 0, 0);
+  const { driver, calls } = makeDriver([OK_ACK], { now: () => VN_10H });
+  const first = { schedule_id: 1, route_id: "R", direction: 1, departure_time: "09:00" };
+  const second = { schedule_id: 2, route_id: "R", direction: 2, departure_time: "10:00" };
+  driver.schedules = [first, second];
+  driver.schedule = first;
+  driver.trip = { route_number: "01", direction: 1 };
+  driver.route = { totalDist: 1000 };
+  driver.distance = 500;
+  const paths = [];
+  driver.api = async path => {
+    paths.push(path);
+    return { geometry: { type: "LineString", coordinates: [[106.70, 10.8], [106.71, 10.8]] } };
+  };
+
+  driver.tick();
+  await flush();
+  await flush();
+
+  assert.deepEqual(paths, ["/routes/R/path?direction=2"]);
+  assert.equal(driver.schedule, second);
+  assert.equal(driver.distance, 0);
+  assert.deepEqual(calls.acks[0], ["trip:start", { schedule_id: 2 }]);
+  assert.equal(calls.emits.length, 0);   // tick đổi chuyến không phát gps_ping
+  await driver.stop(false);
+});
+
+test("chưa tới giờ chuyến kế tiếp → tick phát gps_ping như thường", async t => {
+  mockTimers(t);
+  const VN_0930 = Date.UTC(2026, 9, 5, 2, 30, 0);
+  const { driver, calls } = makeDriver([OK_ACK], { now: () => VN_0930 });
+  driver.schedules = [
+    { schedule_id: 1, route_id: "R", direction: 1, departure_time: "09:00" },
+    { schedule_id: 2, route_id: "R", direction: 2, departure_time: "10:00" }
+  ];
+  driver.schedule = driver.schedules[0];
+  driver.trip = { route_number: "01", direction: 1 };
+  const { processRouteGeometry } = require("./route-geometry");
+  driver.route = processRouteGeometry([[106.70, 10.8], [106.71, 10.8]]);
+  driver.distance = 0;
+  driver.baseSpeed = 30;
+  driver.tick();
+  assert.equal(calls.emits.length, 1);
+  assert.equal(calls.emits[0][0], "gps_ping");
+  await driver.stop(false);
 });
