@@ -78,7 +78,6 @@ Hàm nội bộ `endLiveTrip(vehicleId)`:
 
 Các sự kiện:
 - **`trip:start`:**
-  - Câu SELECT lấy thêm `s.departure_time`.
   - Nếu `liveTrips` đang giữ **một chuyến khác** của xe này: gọi `endLiveTrip` trước.
   - Đặt `socket.data.trip`.
   - Nếu chuyến chưa có trong registry thì `registry.start`, rồi ghi `liveTrips.set(vehicle_id, schedule_id)`.
@@ -93,7 +92,7 @@ Các sự kiện:
 - **Bỏ** hẳn việc phát tới mọi viewer. `createViewerBroadcaster` đổi thành:
   - `publishLocation(packet)`
   - `publishOffline({ vehicle_id, schedule_id })`
-  - cả hai đều gửi tới `io.of("/").to(["trip:" + id, "staff"])`.
+  - cả hai đều gửi tới room `trip:<schedule_id>`, `vehicle:<vehicle_id>` và `staff`.
 
 ## 3. ETA (`backend/src/sockets/eta.js`, hàm thuần, kèm cache)
 
@@ -169,7 +168,7 @@ Hàm `buildTripList(db, registry, { route_id, direction, board_stop_id }, now)` 
 | Token | Kết quả |
 |---|---|
 | JWT hợp lệ, role ADMIN/MANAGER | `socket.join("staff")` |
-| JWT hợp lệ, role DRIVER | lưu `socket.data.driverVehicleId` (tra `vehicles.driver_user_id`) |
+| JWT hợp lệ, role DRIVER | join room `vehicle:<vehicle_id>` (tra `vehicles.driver_user_id`) — luôn thấy xe mình, bất kể chuyến |
 | Không có, sai, hết hạn | coi như khách, **không báo lỗi** (trang công khai hay còn token cũ) |
 
 ### 4.2 Sự kiện client → server
@@ -191,8 +190,7 @@ Hàm `buildTripList(db, registry, { route_id, direction, board_stop_id }, now)` 
 - Thành công: `{ ok: true, status }`.
 - Thất bại: `{ ok: false, error: "TRIP_NOT_AVAILABLE" | "SERVER_ERROR" }`.
 - Điều kiện được xem:
-  - `isPublicTrip` trả về `true`;
-  - **hoặc** `schedule.vehicle_id === socket.data.driverVehicleId`. Tài xế xem được mọi chuyến thuộc xe của mình, kể cả ngoài cửa sổ công khai, vì trang tài xế mở bản đồ trước khi gửi `trip:start`.
+  - `isPublicTrip` trả về `true`.
 - Server rời room chuyến cũ rồi join room `trip:<schedule_id>`.
 - Mỗi socket chỉ ở một room chuyến.
 
@@ -203,15 +201,15 @@ Hàm `buildTripList(db, registry, { route_id, direction, board_stop_id }, now)` 
 
 | Sự kiện | Room nhận | Payload |
 |---|---|---|
-| `fleet_location_update` | `trip:<id>`, `staff` | gói GPS hiện tại + `schedule_id` |
-| `vehicle_offline` | `trip:<id>`, `staff` | `{ vehicle_id, schedule_id }` |
+| `fleet_location_update` | `trip:<id>`, `vehicle:<vehicle_id>`, `staff` | gói GPS hiện tại + `schedule_id` |
+| `vehicle_offline` | `trip:<id>`, `vehicle:<vehicle_id>`, `staff` | `{ vehicle_id, schedule_id }` |
 | `trips:update` | gửi riêng từng socket trong `route:<id>:<dir>` | `{ route_id, direction, trips }` |
 
 **Cách đẩy `trips:update`:**
 - Định kỳ **15 giây** một lần: duyệt các room `route:*` đang có người.
 - **Ngay lập tức** khi registry phát `change` cho một (tuyến, chiều): đẩy cho cả hai room chiều của tuyến đó, vì vận tốc ước tính cho chuyến sắp tới tính trên cả tuyến.
 - Trong một room, danh sách được tính **một lần cho mỗi `board_stop_id` khác nhau**, rồi gửi cho các socket có cùng trạm.
-- Timer không chạy khi không có room `route:*` nào.
+- Timer không làm gì khi không có room `route:*` nào.
 
 ## 5. Giao diện
 
@@ -245,8 +243,7 @@ Bảng "Theo dõi xe" của khách **không** hiện "Trạm tiếp theo" (khác
 - Lọc theo tuyến (`applyFleetFilter`) giữ nguyên.
 
 ### 5.3 Trang tài xế (`drive-map.js`)
-- `connectRealtime` gửi kèm JWT tài xế.
-- Trong `onConnect` (lần đầu và mỗi lần kết nối lại), gửi `trip:watch { schedule_id }` của chuyến đang chọn.
+- `connectRealtime` gửi kèm JWT tài xế; server tự cho socket vào room `vehicle:<vehicle_id>`, không cần `trip:watch`.
 
 ## 6. Seed và simulator
 
@@ -305,7 +302,7 @@ Bảng "Theo dõi xe" của khách **không** hiện "Trạm tiếp theo" (khác
 - Gửi `trip:watch` thì chỉ nhận xe của chuyến đó.
 - `trip:watch` một chuyến khác thì không còn nhận gói của chuyến cũ.
 - Socket nhân viên nhận gói của mọi xe. Token sai hoặc hết hạn bị coi là khách.
-- Chuyến ngoài cửa sổ → `TRIP_NOT_AVAILABLE`. Riêng tài xế watch được chuyến của xe mình ngoài cửa sổ.
+- Chuyến ngoài cửa sổ → `TRIP_NOT_AVAILABLE`. Socket tài xế trên `/` nhận xe của mình mà không cần watch, không nhận xe khác.
 - `trips:subscribe` ack trả đúng danh sách. `trips:update` được đẩy ngay khi một chuyến bắt đầu hoặc kết thúc. Payload của room tuyến không có `longitude`/`latitude`.
 - `vehicle_offline` chỉ tới room của chuyến đó và room `staff`.
 
@@ -333,6 +330,8 @@ Bảng "Theo dõi xe" của khách **không** hiện "Trạm tiếp theo" (khác
 |---|---|
 | `backend/src/sockets/trip-registry.js` | mới |
 | `backend/src/sockets/eta.js` | mới |
+| `backend/src/sockets/route-geometry.js` | mới |
+| `backend/src/sockets/trip-list.js` | mới |
 | `backend/src/sockets/viewer.socket.js` | handshake, các sự kiện watch/subscribe, timer đẩy `trips:update` |
 | `backend/src/sockets/device.socket.js` | `onMap` → `liveTrips`, phát theo room, gọi registry, đổi chuyến |
 | `backend/src/sockets/index.js` | tạo registry, nối vào cả hai namespace |
