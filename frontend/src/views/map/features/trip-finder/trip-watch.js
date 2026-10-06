@@ -8,7 +8,7 @@ import { state } from "../../map.state.js";
 import { getFleetSocket, onFleetEvent, clearFleet } from "../fleet-tracking.js";
 
 const ACK_TIMEOUT_MS = 5000;
-const watch = { subscription: null, trips: [], ended: false, listeners: [] };
+const watch = { subscription: null, trips: [], ended: false, seq: 0, listeners: [] };
 
 function emitAck(event, payload) {
   const socket = getFleetSocket();
@@ -37,13 +37,25 @@ export async function subscribeTrips({ route_id, direction, board_stop_id }) {
 }
 
 export async function watchTrip(scheduleId) {
-  if (state.watchedScheduleId !== scheduleId) clearFleet();
+  const seq = ++watch.seq;   // chỉ ack của lần gọi mới nhất được áp dụng
+  if (state.watchedScheduleId !== scheduleId) {
+    clearFleet();
+    // Xóa số liệu của xe trước để không lưu lại trên bảng
+    ["busSpeed", "busCoord"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = "--";
+    });
+  }
   state.watchedScheduleId = scheduleId;
   watch.ended = false;
   notify();
   const ack = await emitAck("trip:watch", { schedule_id: scheduleId });
-  if (state.watchedScheduleId !== scheduleId) return ack;
-  if (!ack.ok) watch.ended = true;
+  if (seq !== watch.seq) return ack;
+  // Chỉ TRIP_NOT_AVAILABLE là chuyến đã kết thúc; lỗi khác (timeout, offline...) giữ nguyên để kết nối lại thì đăng ký lại
+  if (!ack.ok && ack.error === "TRIP_NOT_AVAILABLE") {
+    watch.ended = true;
+    clearFleet();
+  }
   notify();
   return ack;
 }
@@ -51,7 +63,7 @@ export async function watchTrip(scheduleId) {
 // Khách đổi tuyến / tìm điểm đến mới: rời cả 2 room, gỡ xe
 export function clearTripWatch() {
   const socket = getFleetSocket();
-  if (socket && socket.connected) {
+  if (socket) {   // socket.io giữ hàng đợi khi mất kết nối nên thứ tự với watch/subscribe trước đó được giữ
     if (state.watchedScheduleId) socket.emit("trip:unwatch");
     if (watch.subscription) socket.emit("trips:unsubscribe");
   }
@@ -61,6 +73,7 @@ export function clearTripWatch() {
 
 // Socket mới (đổi vai trò) không còn room nào → chỉ xóa trạng thái
 export function resetTripWatch() {
+  watch.seq++;
   state.watchedScheduleId = null;
   watch.subscription = null;
   watch.trips = [];

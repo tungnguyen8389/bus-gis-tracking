@@ -107,6 +107,9 @@ function addTripMarker(longitude, latitude, color, title, content) {
 }
 
 async function selectDestination(stop) {
+  // Bỏ theo dõi ngay: xe và bảng biến mất, không còn ở trong room khi đang tìm tuyến mới
+  clearTripWatch();
+  activeTripResult = null;
   document.getElementById("destInput").value = stop.stop_name;
   document.getElementById("destSuggestions").style.display = "none";
 
