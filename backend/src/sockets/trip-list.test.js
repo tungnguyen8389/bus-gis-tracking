@@ -14,7 +14,8 @@ const SCHEDULES = [
   { schedule_id: 103, route_id: "R1", direction: 1, dep_sec: 13 * 3600, plate_number: "51B-3", driver_name: "TX 3" },
   { schedule_id: 104, route_id: "R1", direction: 1, dep_sec: 9 * 3600 + 40 * 60, plate_number: "51B-4", driver_name: "TX 4" },
   { schedule_id: 105, route_id: "R1", direction: 1, dep_sec: 9 * 3600 + 50 * 60, plate_number: "51B-5", driver_name: "TX 5" },
-  { schedule_id: 201, route_id: "R2", direction: 1, dep_sec: 10.5 * 3600, plate_number: "51B-6", driver_name: "TX 6" }
+  { schedule_id: 201, route_id: "R2", direction: 1, dep_sec: 10.5 * 3600, plate_number: "51B-6", driver_name: "TX 6" },
+  { schedule_id: 301, route_id: "R1", direction: 2, dep_sec: 9.5 * 3600, plate_number: "51B-7", driver_name: "TX 7" }
 ];
 const PATHS = { "R1|1": { type: "LineString", coordinates: [[106.70, LAT], [106.74, LAT]] } };
 const STOPS = {
@@ -25,14 +26,24 @@ const STOPS = {
   ]
 };
 
-function makeDb() {
+function makeDb(opts = {}) {
   const calls = { paths: 0 };
   const db = {
     async query(sql, [routeId, direction]) {
       const key = `${routeId}|${direction}`;
       if (sql.includes("FROM route_paths")) {
         calls.paths++;
-        return [PATHS[key] ? [{ geom_json: JSON.stringify(PATHS[key]) }] : []];
+        // Xử lý lỗi đầu tiên nếu throwPathsError được set
+        if (opts.throwPathsError && calls.paths === 1) {
+          throw new Error("DB connection error");
+        }
+        // Xử lý lỗi cho direction cụ thể nếu throwPathsForKey được set
+        if (opts.throwPathsForKey === key) {
+          throw new Error("DB connection error");
+        }
+        // Lấy path từ PATHS hoặc override nếu có
+        const paths = opts.paths || PATHS;
+        return [paths[key] ? [{ geom_json: JSON.stringify(paths[key]) }] : []];
       }
       if (sql.includes("FROM route_stops")) return [STOPS[key] || []];
       if (sql.includes("FROM schedules")) {
@@ -115,4 +126,62 @@ test("không chuyến nào trong cửa sổ → [] và không nạp hình học"
   clock.t = Date.UTC(2026, 9, 5, 15, 0, 0);   // 22:00 VN
   assert.deepEqual(await lister.list({ route_id: "R1", direction: 1, board_stop_id: "S2" }), []);
   assert.equal(calls.paths, 0);
+});
+
+test("lỗi nạp hình học xóa cache, lần sau retry thành công", async () => {
+  const clock = { t: VN_10H };
+  const registry = createTripRegistry({ now: () => clock.t });
+  const { db, calls } = makeDb({ throwPathsError: true });
+  const lister = createTripLister({ db, registry, now: () => clock.t });
+
+  // Lần đầu: lỗi
+  try {
+    await lister.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
+    assert.fail("Không nên thành công");
+  } catch {
+    // Kỳ vọng lỗi
+  }
+
+  // Lần hai: throwPathsError giả bị tắt (calls.paths = 2), thành công
+  const trips = await lister.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
+  assert.equal(calls.paths, 2);
+  assert.ok(trips.length > 0);
+  assert.ok(trips.some(t => t.eta_board !== null)); // Có ETA vì hình học được nạp thành công
+});
+
+test("xe đang chạy chiều khác lỗi nạp hình học không làm fail list", async () => {
+  const clock = { t: VN_10H };
+  const registry = createTripRegistry({ now: () => clock.t });
+  const { db, calls } = makeDb({ throwPathsForKey: "R1|2" });
+  const lister = createTripLister({ db, registry, now: () => clock.t });
+
+  // Xe chiều 2 (direction = 2) đang chạy nhưng hình học nạp lỗi
+  registry.start({ schedule_id: 301, vehicle_id: "V2", route_id: "R1", direction: 2 });
+  registry.recordPing(301, { longitude: 106.71, latitude: LAT, speed_kmh: 30 });
+
+  // Xe chiều 1 đang chạy
+  registry.start({ schedule_id: 101, vehicle_id: "V1", route_id: "R1", direction: 1 });
+  registry.recordPing(101, { longitude: 106.71, latitude: LAT, speed_kmh: 30 });
+
+  // List chiều 1 vẫn thành công (lỗi R1|2 không làm fail)
+  const trips = await lister.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
+  assert.ok(trips.length > 0);
+  assert.ok(trips.some(t => t.status === "RUNNING")); // Chuyến 101 vẫn có
+});
+
+test("tuyến không có lộ trình được re-query lần sau", async () => {
+  const clock = { t: VN_10H };
+  const registry = createTripRegistry({ now: () => clock.t });
+
+  // Lần đầu: R1|1 không có lộ trình
+  const { db: db1, calls: calls1 } = makeDb({ paths: {} });
+  const lister1 = createTripLister({ db: db1, registry, now: () => clock.t });
+  await lister1.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
+  assert.equal(calls1.paths, 1);
+
+  // Lần hai: lấy R1|1 từ PATHS (đã có)
+  const { db: db2, calls: calls2 } = makeDb();
+  const lister2 = createTripLister({ db: db2, registry, now: () => clock.t });
+  await lister2.list({ route_id: "R1", direction: 1, board_stop_id: "S2" });
+  assert.equal(calls2.paths, 1); // Lấy từ DB, không cache null từ lần trước
 });

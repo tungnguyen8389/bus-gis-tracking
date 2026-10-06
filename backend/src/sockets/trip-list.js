@@ -30,12 +30,18 @@ async function loadGeometry(db, routeId, direction) {
 }
 
 function createTripLister({ db, registry, now = Date.now }) {
-  const cache = new Map(); // "route|dir" → Promise<{ line, stops } | null>
+  const cache = new Map(); // "route|dir" → Promise<{ line, stops }>
 
   function geometry(routeId, direction) {
     const key = `${routeId}|${direction}`;
     if (!cache.has(key)) {
-      cache.set(key, loadGeometry(db, routeId, direction).catch(err => {
+      cache.set(key, loadGeometry(db, routeId, direction).then(geo => {
+        // Không cache null result (lộ trình chưa có, thử lại lần sau)
+        if (geo === null) {
+          cache.delete(key);
+        }
+        return geo;
+      }).catch(err => {
         cache.delete(key);
         throw err;
       }));
@@ -64,7 +70,12 @@ function createTripLister({ db, registry, now = Date.now }) {
     // Vận tốc từng xe đang chạy của tuyến (cả 2 chiều) → trung bình làm vận tốc cho chuyến sắp tới
     const speeds = new Map();
     for (const trip of registry.listByRoute(route_id)) {
-      const tripGeo = await geometry(trip.route_id, trip.direction);
+      let tripGeo = null;
+      try {
+        tripGeo = await geometry(trip.route_id, trip.direction);
+      } catch {
+        // Lỗi nạp hình học của chiều khác không làm fail list, dùng fallback speed
+      }
       speeds.set(trip.schedule_id, vehicleSpeedKmh(trip, tripGeo ? tripGeo.line : null));
     }
     const routeSpeed = averageSpeedKmh([...speeds.values()]);
