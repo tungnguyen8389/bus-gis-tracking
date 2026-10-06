@@ -1,6 +1,7 @@
 // --------------------------------------------------------------------
-// SEED TÀI XẾ DEMO: driverNN (role DRIVER) + xe DRV_NN + 1 lịch trình / xe
-// Chạy: npm run db:seed-drivers -- --count 20
+// SEED TÀI XẾ DEMO: driverNN (role DRIVER) + xe DRV_NN, 4 tài xế mỗi tuyến, mỗi tài xế
+// chạy 17 chuyến/ngày (05:00 + slot×15' + k×60'), đổi chiều sau mỗi chuyến.
+// Chạy: npm run db:seed-drivers -- --count 20   (→ 5 tuyến)
 // Chạy lại an toàn: upsert theo khóa cố định để KHÔNG mất log hành trình
 // (vehicle_tracking_logs xóa theo xe — ON DELETE CASCADE).
 // --------------------------------------------------------------------
@@ -9,6 +10,11 @@ const { dbPool } = require("../src/config/db");
 const { migrateDriverSchema } = require("../src/config/migrations");
 
 const MAX_COUNT = 99;
+const DRIVERS_PER_ROUTE = 4;
+const FIRST_DEPARTURE_S = 5 * 3600;
+const SLOT_GAP_S = 15 * 60;
+const TRIP_GAP_S = 60 * 60;
+const TRIPS_PER_DRIVER = 17;
 const pad2 = n => String(n).padStart(2, "0");
 
 function parseCount(argv) {
@@ -20,24 +26,37 @@ function parseCount(argv) {
   return n;
 }
 
-// Cặp (tuyến, chiều) của các tuyến có đủ 2 chiều; tuyến số đứng trước tuyến chữ (D4, DL01...)
-async function pickRoutePairs(conn, count) {
+// Các tuyến có đủ 2 chiều; tuyến số đứng trước tuyến chữ (D4, DL01...)
+async function pickRoutes(conn, count) {
   const [rows] = await conn.query(
-    `SELECT p.route_id, r.route_number, p.direction
-     FROM route_paths p
-     JOIN bus_routes r ON r.route_id = p.route_id
-     WHERE p.route_id IN (
+    `SELECT r.route_id, r.route_number
+     FROM bus_routes r
+     WHERE r.route_id IN (
        SELECT route_id FROM route_paths GROUP BY route_id HAVING COUNT(DISTINCT direction) = 2
      )
-     ORDER BY r.route_number REGEXP '^[0-9]+$' DESC, CAST(r.route_number AS UNSIGNED), r.route_number, p.direction`
+     ORDER BY r.route_number REGEXP '^[0-9]+$' DESC, CAST(r.route_number AS UNSIGNED), r.route_number`
   );
   if (rows.length < count) {
-    throw new Error(`Chỉ có ${rows.length} cặp tuyến/chiều đủ 2 chiều, không đủ cho ${count} tài xế`);
+    throw new Error(`Chỉ có ${rows.length} tuyến đủ 2 chiều, không đủ cho ${count} tuyến`);
   }
   return rows.slice(0, count);
 }
 
-async function upsertDriver(conn, i, pair, passwordHash) {
+const toTime = s =>
+  [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map(n => String(n).padStart(2, "0")).join(":");
+
+// Tài xế thứ slot của tuyến: xuất bến 05:00 + slot×15' + k×60', đổi chiều sau mỗi chuyến
+// → mỗi tuyến có chuyến 15 phút một lần, mỗi chiều 30 phút một lần
+function buildSchedules(routeId, vehicleId, slot) {
+  return Array.from({ length: TRIPS_PER_DRIVER }, (_, k) => [
+    routeId,
+    vehicleId,
+    toTime(FIRST_DEPARTURE_S + slot * SLOT_GAP_S + k * TRIP_GAP_S),
+    (slot + k) % 2 === 0 ? 1 : 2
+  ]);
+}
+
+async function upsertDriver(conn, i, route, slot, passwordHash) {
   const nn = pad2(i);
   const username = `driver${nn}`;
   const fullName = `Tài xế ${nn}`;
@@ -62,8 +81,8 @@ async function upsertDriver(conn, i, pair, passwordHash) {
   // schedules không có bảng con → thay mới an toàn
   await conn.query("DELETE FROM schedules WHERE vehicle_id = ?", [vehicleId]);
   await conn.query(
-    "INSERT INTO schedules (route_id, vehicle_id, departure_time, direction) VALUES (?, ?, SEC_TO_TIME(?), ?)",
-    [pair.route_id, vehicleId, 5 * 3600 + i * 600, pair.direction]
+    "INSERT INTO schedules (route_id, vehicle_id, departure_time, direction) VALUES ?",
+    [buildSchedules(route.route_id, vehicleId, slot)]
   );
 }
 
@@ -97,15 +116,19 @@ async function main() {
     console.log(">>> [Seed] Kiểm tra cấu trúc bảng cho tài xế");
     await migrateDriverSchema(conn);
 
-    const pairs = await pickRoutePairs(conn, count);
+    const routes = await pickRoutes(conn, Math.ceil(count / DRIVERS_PER_ROUTE));
     const passwordHash = await bcrypt.hash(password, 10);
 
     await conn.beginTransaction();
     try {
-      for (let i = 1; i <= count; i++) await upsertDriver(conn, i, pairs[i - 1], passwordHash);
+      for (let i = 1; i <= count; i++) {
+        const route = routes[Math.floor((i - 1) / DRIVERS_PER_ROUTE)];
+        await upsertDriver(conn, i, route, (i - 1) % DRIVERS_PER_ROUTE, passwordHash);
+      }
       const removed = await removeExtras(conn, count);
       await conn.commit();
       console.log(`>>> [Seed] Xong: driver01..driver${pad2(count)} (mật khẩu "${password}"), xe DRV_01..DRV_${pad2(count)}`);
+      console.log(`>>> [Seed] Tuyến: ${routes.map(r => r.route_number).join(", ")} (${DRIVERS_PER_ROUTE} tài xế/tuyến, ${TRIPS_PER_DRIVER} chuyến/tài xế)`);
       if (removed > 0) console.log(`>>> [Seed] Đã xóa ${removed} xe seed thừa (log hành trình của các xe này bị xóa theo)`);
     } catch (err) {
       await conn.rollback();
