@@ -420,9 +420,11 @@ async function runTestSuite() {
     const sch2 = (await fetchJson(`${API_BASE}/driver/me`, { headers: auth2 })).data.schedules[0];
     const vehicleId = d1.data.user.vehicle_id;
 
-    const viewer = openSocket("");
-    await waitConnect(viewer);
-    logPass("Kết nối viewer '/'", `Đã kết nối Socket.io tại ${SOCKET_URL}`);
+    // Nhân viên nhận mọi xe (room staff); khách chỉ nhận chuyến mình trip:watch
+    const viewer = openSocket("", { token: adminToken });
+    const guest = openSocket("");
+    await Promise.all([waitConnect(viewer), waitConnect(guest)]);
+    logPass("Kết nối viewer '/'", `Nhân viên + khách đã kết nối Socket.io tại ${SOCKET_URL}`);
 
     // 4.1 /device không token / token nhân viên
     const noToken = await waitConnect(openSocket("/device")).then(() => "connected", e => e.message);
@@ -453,12 +455,34 @@ async function runTestSuite() {
 
     const trip = await dev.timeout(3000).emitWithAck("trip:start", { schedule_id: sch1.schedule_id });
     const gotLocation = waitFor(viewer, "fleet_location_update", d => d.vehicle_id === vehicleId);
+    const guestSilent = expectNone(guest, "fleet_location_update", d => d.vehicle_id === vehicleId);
     dev.emit("gps_ping", { vehicle_id: "DRV_99", latitude: 10.87052, longitude: 106.80196, speed_kmh: 35, heading: 90 });
     const loc = await gotLocation;
-    if (trip.ok && loc.vehicle_id === vehicleId && loc.route_id === sch1.route_id && loc.timestamp) {
-      logPass("Luồng GPS tài xế → viewer", `Xe ${loc.plate_number} | Tuyến ${loc.route_number} | [${loc.longitude}, ${loc.latitude}] (vehicle_id giả bị bỏ)`);
+    if (trip.ok && loc.vehicle_id === vehicleId && loc.route_id === sch1.route_id && loc.schedule_id === sch1.schedule_id && loc.timestamp) {
+      logPass("Luồng GPS tài xế → nhân viên", `Xe ${loc.plate_number} | Tuyến ${loc.route_number} | chuyến ${loc.schedule_id} (vehicle_id giả bị bỏ)`);
     } else {
-      logFail("Luồng GPS tài xế → viewer", JSON.stringify({ trip, loc }));
+      logFail("Luồng GPS tài xế → nhân viên", JSON.stringify({ trip, loc }));
+    }
+    if (await guestSilent) logPass("Khách chưa chọn chuyến", "Không nhận vị trí xe nào");
+    else logFail("Khách chưa chọn chuyến", "Khách nhận được vị trí khi chưa trip:watch!");
+
+    // 4.3b Khách xem danh sách chuyến của tuyến (không tọa độ) rồi theo dõi đúng chuyến đang chạy
+    const subscribed = await guest.timeout(3000).emitWithAck("trips:subscribe", { route_id: sch1.route_id, direction: sch1.direction });
+    const listed = subscribed.ok && subscribed.trips.find(x => x.schedule_id === sch1.schedule_id);
+    if (listed && listed.status === "RUNNING" && !/longitude|latitude/.test(JSON.stringify(subscribed.trips))) {
+      logPass("trips:subscribe", `${subscribed.trips.length} chuyến, chuyến ${sch1.schedule_id} đang chạy, không lộ tọa độ`);
+    } else {
+      logFail("trips:subscribe", JSON.stringify(subscribed));
+    }
+    const watched = await guest.timeout(3000).emitWithAck("trip:watch", { schedule_id: sch1.schedule_id });
+    await sleep(300);
+    const guestLocation = waitFor(guest, "fleet_location_update", d => d.vehicle_id === vehicleId);
+    dev.emit("gps_ping", { latitude: 10.8706, longitude: 106.8020, speed_kmh: 35, heading: 90 });
+    const guestLoc = await guestLocation;
+    if (watched.ok && guestLoc.schedule_id === sch1.schedule_id) {
+      logPass("trip:watch", `Khách nhận đúng xe ${guestLoc.plate_number} của chuyến ${sch1.schedule_id}`);
+    } else {
+      logFail("trip:watch", JSON.stringify({ watched, guestLoc }));
     }
 
     // 4.4 Gói sai định dạng không được phát
@@ -480,7 +504,7 @@ async function runTestSuite() {
     const offline = waitFor(viewer, "vehicle_offline", d => d.vehicle_id === vehicleId);
     await dev2.timeout(3000).emitWithAck("trip:end", {});
     await offline;
-    logPass("Kết thúc chuyến", `Viewer nhận vehicle_offline cho ${vehicleId}`);
+    logPass("Kết thúc chuyến", `Nhân viên nhận vehicle_offline cho ${vehicleId}`);
   } catch (err) {
     logFail("Module WebSocket Realtime", err.message);
   } finally {
