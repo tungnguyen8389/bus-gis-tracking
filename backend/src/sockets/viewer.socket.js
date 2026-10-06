@@ -23,7 +23,7 @@ function createViewerBroadcaster(io) {
 // Không token / token sai / hết hạn → khách, KHÔNG báo lỗi (trang công khai hay còn token cũ).
 function createViewerAuth({ db, jwtSecret }) {
   return async (socket, next) => {
-    socket.data = { tripRoom: null, routeRoom: null, subscription: null };
+    socket.data = { tripRoom: null, routeRoom: null, subscription: null, watchSeq: 0 };
     const token = socket.handshake.auth?.token;
     if (!token) return next();
     let user;
@@ -137,6 +137,7 @@ function registerViewerSocket(io, { db, jwtSecret, registry, tripLister, now = D
 
     socket.on("trip:watch", async (payload, ack) => {
       const reply = typeof ack === "function" ? ack : () => {};
+      const seq = ++socket.data.watchSeq; // lệnh watch/unwatch sau cùng thắng
       const scheduleId = Number(payload?.schedule_id);
       if (!Number.isInteger(scheduleId) || scheduleId <= 0) return reply({ ok: false, error: "TRIP_NOT_AVAILABLE" });
       try {
@@ -144,6 +145,10 @@ function registerViewerSocket(io, { db, jwtSecret, registry, tripLister, now = D
           "SELECT schedule_id, TIME_TO_SEC(departure_time) AS dep_sec FROM schedules WHERE schedule_id = ?",
           [scheduleId]
         );
+        // Lệnh khác đến trong lúc chờ DB, hoặc socket đã ngắt: không join (tránh room ma)
+        if (!socket.connected || seq !== socket.data.watchSeq) {
+          return socket.connected ? reply({ ok: false, error: "TRIP_NOT_AVAILABLE" }) : undefined;
+        }
         const running = registry.has(scheduleId);
         if (!rows[0] || !isPublicTrip(Number(rows[0].dep_sec), now(), running)) {
           return reply({ ok: false, error: "TRIP_NOT_AVAILABLE" });
@@ -158,7 +163,10 @@ function registerViewerSocket(io, { db, jwtSecret, registry, tripLister, now = D
       }
     });
 
-    socket.on("trip:unwatch", () => leave(socket, "tripRoom"));
+    socket.on("trip:unwatch", () => {
+      socket.data.watchSeq++;
+      leave(socket, "tripRoom");
+    });
   });
 
   return { stop: () => clearInterval(timer) };

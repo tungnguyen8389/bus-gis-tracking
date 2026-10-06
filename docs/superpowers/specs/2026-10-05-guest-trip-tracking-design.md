@@ -73,7 +73,7 @@ createTripRegistry({ now = Date.now }) → {
 Hàm nội bộ `endLiveTrip(vehicleId)`:
 - đọc `schedule_id` từ `liveTrips`;
 - gọi `registry.end(schedule_id)`;
-- phát `vehicle_offline { vehicle_id, schedule_id }` vào room `trip:<schedule_id>` và room `staff`;
+- phát `vehicle_offline { vehicle_id, schedule_id }` vào room `trip:<schedule_id>`, `vehicle:<vehicle_id>` và `staff`;
 - xóa `vehicleId` khỏi `liveTrips`.
 
 Các sự kiện:
@@ -84,7 +84,7 @@ Các sự kiện:
   - Phiên thay thế gửi lại **cùng** `schedule_id` thì giữ nguyên bản ghi registry, không mất các mẫu vận tốc.
 - **`gps_ping` hợp lệ:**
   - Gói tin thêm `schedule_id`.
-  - Gửi `fleet_location_update` tới room `trip:<schedule_id>` và room `staff` (Mục 4.1).
+  - Gửi `fleet_location_update` tới room `trip:<schedule_id>`, `vehicle:<vehicle_id>` và `staff` (Mục 4.1).
   - Gọi `registry.recordPing`.
 - **`trip:end`:** `socket.data.trip = null`, rồi gọi `endLiveTrip(vehicle_id)` nếu xe có trong `liveTrips`. Trường hợp phiên thay thế chưa có `trip` nhưng xe vẫn đang hiện trên bản đồ cũng được xử lý đúng.
 - **`disconnect` của socket đang giữ xe:** gọi `endLiveTrip(vehicle_id)`.
@@ -180,7 +180,7 @@ Hàm `buildTripList(db, registry, { route_id, direction, board_stop_id }, now)` 
   - `{ ok: false, error: "SERVER_ERROR" }`
 - Server làm:
   - rời room tuyến cũ (nếu có), rồi join room `route:<route_id>:<direction>`;
-  - lưu `socket.data.boardStopId`.
+  - lưu `socket.data.subscription.board_stop_id`.
 - Mỗi socket chỉ ở một room tuyến.
 
 **`trips:unsubscribe`**
@@ -191,6 +191,7 @@ Hàm `buildTripList(db, registry, { route_id, direction, board_stop_id }, now)` 
 - Thất bại: `{ ok: false, error: "TRIP_NOT_AVAILABLE" | "SERVER_ERROR" }`.
 - Điều kiện được xem:
   - `isPublicTrip` trả về `true`.
+- Lệnh sau cùng thắng: `trip:watch`/`trip:unwatch` gửi sau hủy kết quả của `trip:watch` đang chờ.
 - Server rời room chuyến cũ rồi join room `trip:<schedule_id>`.
 - Mỗi socket chỉ ở một room chuyến.
 
@@ -304,7 +305,7 @@ Bảng "Theo dõi xe" của khách **không** hiện "Trạm tiếp theo" (khác
 - Socket nhân viên nhận gói của mọi xe. Token sai hoặc hết hạn bị coi là khách.
 - Chuyến ngoài cửa sổ → `TRIP_NOT_AVAILABLE`. Socket tài xế trên `/` nhận xe của mình mà không cần watch, không nhận xe khác.
 - `trips:subscribe` ack trả đúng danh sách. `trips:update` được đẩy ngay khi một chuyến bắt đầu hoặc kết thúc. Payload của room tuyến không có `longitude`/`latitude`.
-- `vehicle_offline` chỉ tới room của chuyến đó và room `staff`.
+- `vehicle_offline` chỉ tới room của chuyến đó, room xe và room `staff`.
 
 **Cập nhật test có sẵn**
 - `device.socket.test.js`:

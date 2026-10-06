@@ -52,7 +52,7 @@ const fakeDb = {
 const token = (role, userId = 1) => jwt.sign({ user_id: userId, username: `u${userId}`, role }, SECRET);
 const tick = (ms = 80) => new Promise(r => setTimeout(r, ms));
 
-async function startServer({ tripLister } = {}) {
+async function startServer({ tripLister, db = fakeDb, pushIntervalMs = 60_000 } = {}) {
   const httpServer = http.createServer();
   const io = new Server(httpServer);
   const clock = { t: VN_10H };
@@ -64,7 +64,7 @@ async function startServer({ tripLister } = {}) {
     broadcaster: createViewerBroadcaster(io),
     trackingLog: { record: async () => true }
   });
-  const hub = registerViewerSocket(io, { db: fakeDb, jwtSecret: SECRET, registry, tripLister: lister, now, pushIntervalMs: 60_000 });
+  const hub = registerViewerSocket(io, { db, jwtSecret: SECRET, registry, tripLister: lister, now, pushIntervalMs });
   await new Promise(r => httpServer.listen(0, r));
   const base = `http://localhost:${httpServer.address().port}`;
   const clients = [];
@@ -75,7 +75,7 @@ async function startServer({ tripLister } = {}) {
     return s;
   };
   const close = () => { hub.stop(); clients.forEach(c => c.disconnect()); return new Promise(r => io.close(r)); };
-  return { connect, clock, registry, close };
+  return { connect, clock, registry, io, close };
 }
 
 const collect = (socket, event) => {
@@ -239,4 +239,84 @@ test("Review focus: lister lỗi → subscribe trả SERVER_ERROR, đẩy theo s
   await startDriver(srv, 1, 11);   // registry change → đẩy → lister ném lỗi
   await tick();
   assert.equal(guest.connected, true);
+});
+
+// db giả giữ câu SELECT của trip:watch (theo schedule_id) cho tới khi release()
+function gatedDb() {
+  const gates = new Map();
+  return {
+    gate(scheduleId) {
+      let release;
+      gates.set(scheduleId, new Promise(r => { release = r; }));
+      return () => { gates.delete(scheduleId); release(); };
+    },
+    async query(sql, params) {
+      if (!sql.includes("JOIN") && sql.includes("FROM schedules")) {
+        const g = gates.get(params[0]);
+        if (g) await g;
+      }
+      return fakeDb.query(sql, params);
+    }
+  };
+}
+
+test("trip:watch đang chờ DB rồi trip:unwatch → không vào room chuyến", async t => {
+  const db = gatedDb();
+  const srv = await startServer({ db }); t.after(srv.close);
+  const dev1 = await startDriver(srv, 1, 11);
+  const guest = await srv.connect("");
+  const release = db.gate(11);
+  const pending = ack(guest, "trip:watch", { schedule_id: 11 });
+  await tick();
+  guest.emit("trip:unwatch");
+  await tick();
+  release();
+  assert.deepEqual(await pending, { ok: false, error: "TRIP_NOT_AVAILABLE" });
+  const got = collect(guest, "fleet_location_update");
+  await ping(srv, dev1);
+  assert.equal(got.length, 0);
+});
+
+test("trip:watch A đang chờ rồi watch B → chỉ nhận B", async t => {
+  const db = gatedDb();
+  const srv = await startServer({ db }); t.after(srv.close);
+  const dev1 = await startDriver(srv, 1, 11);
+  const dev2 = await startDriver(srv, 2, 22);
+  const guest = await srv.connect("");
+  const release = db.gate(11);
+  const pendingA = ack(guest, "trip:watch", { schedule_id: 11 });
+  await tick();
+  assert.deepEqual(await ack(guest, "trip:watch", { schedule_id: 22 }), { ok: true, status: "RUNNING" });
+  release();
+  assert.deepEqual(await pendingA, { ok: false, error: "TRIP_NOT_AVAILABLE" });
+  const got = collect(guest, "fleet_location_update");
+  await ping(srv, dev1);
+  await ping(srv, dev2);
+  assert.deepEqual(got.map(p => [p.vehicle_id, p.schedule_id]), [["DRV_02", 22]]);
+});
+
+// Chặn chính là socket.io (socket đã ngắt có join = noop); test này giữ hành vi, không đo riêng guard connected
+test("trip:watch đang chờ, khách ngắt kết nối → không để lại room ma", async t => {
+  const db = gatedDb();
+  const srv = await startServer({ db }); t.after(srv.close);
+  await startDriver(srv, 1, 11);
+  const guest = await srv.connect("");
+  const release = db.gate(11);
+  guest.emit("trip:watch", { schedule_id: 11 });
+  await tick();
+  guest.disconnect();
+  await tick();
+  release();
+  await tick();
+  assert.equal(srv.io.of("/").adapter.rooms.get("trip:11"), undefined);
+});
+
+test("đẩy định kỳ: không có thay đổi registry vẫn nhận trips:update", async t => {
+  const srv = await startServer({ pushIntervalMs: 50 }); t.after(srv.close);
+  const guest = await srv.connect("");
+  assert.equal((await ack(guest, "trips:subscribe", { route_id: "R1", direction: 1 })).ok, true);
+  const updates = collect(guest, "trips:update");
+  await tick(250);
+  assert.ok(updates.length >= 1);
+  assert.equal(updates[0].route_id, "R1");
 });
