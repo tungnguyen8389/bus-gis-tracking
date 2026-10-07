@@ -39,12 +39,7 @@ export async function subscribeTrips({ route_id, direction, board_stop_id }) {
 export async function watchTrip(scheduleId) {
   const seq = ++watch.seq;   // chỉ ack của lần gọi mới nhất được áp dụng
   if (state.watchedScheduleId !== scheduleId) {
-    clearFleet();
-    // Xóa số liệu của xe trước để không lưu lại trên bảng
-    ["busSpeed", "busCoord"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.innerText = "--";
-    });
+    clearFleet();   // clearFleet cũng xóa số liệu xe trước trên bảng
   }
   state.watchedScheduleId = scheduleId;
   watch.ended = false;
@@ -90,6 +85,17 @@ onFleetEvent("tripsUpdate", data => {
   const sub = watch.subscription;
   if (!sub || data.route_id !== sub.route_id || data.direction !== sub.direction) return;
   watch.trips = data.trips;
+  // Chuyến đã báo kết thúc nhưng nay chạy lại (thiết bị nối lại) → bỏ trạng thái kết thúc
+  if (watch.ended && data.trips.some(t => t.schedule_id === state.watchedScheduleId && t.status === "RUNNING")) {
+    watch.ended = false;
+  }
+  notify();
+});
+
+// Gói vị trí đầu tiên của chuyến đang xem sau khi báo kết thúc → chuyến đã chạy lại
+onFleetEvent("location", ({ schedule_id }) => {
+  if (!watch.ended || schedule_id !== state.watchedScheduleId) return;
+  watch.ended = false;
   notify();
 });
 

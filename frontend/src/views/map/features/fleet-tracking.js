@@ -6,7 +6,7 @@ import { connectRealtime } from "../../../modules/realtime/realtime.service.js";
 // --------------------------------------------------------------------
 let socketInstance = null;
 // Hook cho các feature khác (trip-watch của khách) mà không import vòng
-const fleetListeners = { connect: [], offline: [], tripsUpdate: [] };
+const fleetListeners = { connect: [], offline: [], tripsUpdate: [], location: [] };
 export function onFleetEvent(name, fn) {
   fleetListeners[name].push(fn);
 }
@@ -37,6 +37,11 @@ export function clearFleet() {
   Object.keys(busAnimStates).forEach(id => delete busAnimStates[id]);
   Object.keys(busCurrentPositions).forEach(id => delete busCurrentPositions[id]);
   state.selectedTrackedVehicleId = null;
+  // Xóa số liệu của xe trước để không lưu lại trên bảng
+  ["busSpeed", "busCoord"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerText = "--";
+  });
 }
 
 // Hàm chuyển đổi siêu tốc WGS84 -> Web Mercator (WKID 3857) để render trực tiếp trên WebGL không qua tầng reprojection
@@ -154,6 +159,7 @@ function onFleetLocationUpdate(data) {
   if (!data || !data.vehicle_id || !map.fleetLayer) return;
   // Khách chỉ hiện đúng chuyến đang theo dõi (server đã lọc theo room; chặn thêm ở client)
   if (!state.isStaff && (state.watchedScheduleId == null || data.schedule_id !== state.watchedScheduleId)) return;
+  emitFleetEvent("location", data);   // trip-watch dùng để biết chuyến đã chạy lại
   const busGraphics = state.busGraphics;
   const mapView = map.view;
 

@@ -135,6 +135,7 @@ async function selectDestination(stop) {
 
 const STATUS_LABEL = { RUNNING: "Đang chạy", UPCOMING: "Sắp xuất bến", PASSED: "Đã qua trạm của bạn" };
 let activeTripResult = null;
+export const resetTripFinderState = () => { activeTripResult = null; };
 
 const formatClock = iso =>
   new Date(iso).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
