@@ -138,6 +138,7 @@ function registerViewerSocket(io, { db, jwtSecret, registry, tripLister, now = D
     socket.on("trip:watch", async (payload, ack) => {
       const reply = typeof ack === "function" ? ack : () => {};
       const seq = ++socket.data.watchSeq; // lệnh watch/unwatch sau cùng thắng
+      leave(socket, "tripRoom");          // mọi lệnh watch đều rời chuyến cũ, kể cả khi lệnh mới thất bại
       const scheduleId = Number(payload?.schedule_id);
       if (!Number.isInteger(scheduleId) || scheduleId <= 0) return reply({ ok: false, error: "TRIP_NOT_AVAILABLE" });
       try {
@@ -153,7 +154,6 @@ function registerViewerSocket(io, { db, jwtSecret, registry, tripLister, now = D
         if (!rows[0] || !isPublicTrip(Number(rows[0].dep_sec), now(), running)) {
           return reply({ ok: false, error: "TRIP_NOT_AVAILABLE" });
         }
-        leave(socket, "tripRoom");
         socket.data.tripRoom = tripRoom(scheduleId);
         socket.join(socket.data.tripRoom);
         reply({ ok: true, status: running ? "RUNNING" : "UPCOMING" });

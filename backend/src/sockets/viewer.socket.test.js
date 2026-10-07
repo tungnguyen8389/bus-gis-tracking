@@ -183,6 +183,75 @@ test("vehicle_offline chỉ tới room chuyến đó và staff", async t => {
   assert.equal(gotOther.length, 0);
 });
 
+test("vehicle_offline cũng tới staff và tài xế của xe (room vehicle:), không tới tài xế xe khác", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const staff = await srv.connect("", { token: token("MANAGER") });
+  const driverViewer = await srv.connect("", { token: token("DRIVER", 1) });
+  const otherDriver = await srv.connect("", { token: token("DRIVER", 2) });
+  const gotStaff = collect(staff, "vehicle_offline");
+  const gotDriver = collect(driverViewer, "vehicle_offline");
+  const gotOther = collect(otherDriver, "vehicle_offline");
+  const dev1 = await startDriver(srv, 1, 11);
+  await ack(dev1, "trip:end", {});
+  await tick();
+  assert.deepEqual(gotStaff, [{ vehicle_id: "DRV_01", schedule_id: 11 }]);
+  assert.deepEqual(gotDriver, [{ vehicle_id: "DRV_01", schedule_id: 11 }]);
+  assert.equal(gotOther.length, 0);
+});
+
+test("thiết bị rớt rồi nối lại cùng chuyến → khách đang watch nhận lại vị trí", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const dev1 = await startDriver(srv, 1, 11);
+  const guest = await srv.connect("");
+  await ack(guest, "trip:watch", { schedule_id: 11 });
+  const offline = collect(guest, "vehicle_offline");
+  const got = collect(guest, "fleet_location_update");
+  dev1.disconnect();
+  await tick();
+  assert.deepEqual(offline, [{ vehicle_id: "DRV_01", schedule_id: 11 }]);
+  const dev1b = await startDriver(srv, 1, 11);
+  await ping(srv, dev1b);
+  assert.deepEqual(got.map(p => [p.vehicle_id, p.schedule_id]), [["DRV_01", 11]]);
+});
+
+test("xe đổi sang chuyến khác (trip:start mới) → khách watch chuyến cũ nhận offline, không nhận gói chuyến mới", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const dev1 = await startDriver(srv, 1, 11);
+  const guest = await srv.connect("");
+  await ack(guest, "trip:watch", { schedule_id: 11 });
+  const offline = collect(guest, "vehicle_offline");
+  const got = collect(guest, "fleet_location_update");
+  assert.equal((await ack(dev1, "trip:start", { schedule_id: 12 })).ok, true);
+  await ping(srv, dev1);
+  assert.deepEqual(offline, [{ vehicle_id: "DRV_01", schedule_id: 11 }]);
+  assert.equal(got.length, 0);
+});
+
+test("trip:watch thất bại vẫn rời chuyến đang xem (không nhận gói chuyến cũ)", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const dev2 = await startDriver(srv, 2, 22);
+  const guest = await srv.connect("");
+  assert.deepEqual(await ack(guest, "trip:watch", { schedule_id: 22 }), { ok: true, status: "RUNNING" });
+  assert.deepEqual(await ack(guest, "trip:watch", { schedule_id: 11 }), { ok: false, error: "TRIP_NOT_AVAILABLE" });
+  const got = collect(guest, "fleet_location_update");
+  await ping(srv, dev2);
+  assert.equal(got.length, 0);
+});
+
+test("chuyến kết thúc → trips:update đẩy ngay, chuyến không còn RUNNING", async t => {
+  const srv = await startServer(); t.after(srv.close);
+  const guest = await srv.connect("");
+  const dev1 = await startDriver(srv, 1, 11);
+  await ack(guest, "trips:subscribe", { route_id: "R1", direction: 1 });
+  const updates = collect(guest, "trips:update");
+  await ack(dev1, "trip:end", {});
+  await tick();
+  assert.ok(updates.length >= 1);
+  const last = updates[updates.length - 1];
+  assert.equal(last.trips.some(x => x.schedule_id === 11 && x.status === "RUNNING"), false);
+  assert.deepEqual(last.trips.map(x => x.schedule_id), [12]);
+});
+
 test("trips:subscribe ack danh sách; trips:update đẩy ngay khi chuyến bắt đầu; không có tọa độ", async t => {
   const srv = await startServer(); t.after(srv.close);
   const guest = await srv.connect("");
