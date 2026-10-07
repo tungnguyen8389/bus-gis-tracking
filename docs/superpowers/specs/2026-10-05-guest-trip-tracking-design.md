@@ -49,10 +49,11 @@ Server chỉ tạo **một instance**, dùng chung cho device socket và viewer 
 
 ```js
 createTripRegistry({ now = Date.now }) → {
-  start(trip),                  // trip = { schedule_id, vehicle_id, route_id, direction, departure_time }
+  start(trip),                  // trip = { schedule_id, vehicle_id, route_id, direction }
   end(scheduleId),
   recordPing(scheduleId, { longitude, latitude, speed_kmh }),
-  get(scheduleId),              // → trip + { started_at, samples, speeds } | undefined
+  has(scheduleId),
+  get(scheduleId),              // → trip + { started_at, last_position, samples, speed_sum, speed_count } | undefined
   listByRoute(routeId, direction),
   on("change", ({ route_id, direction }) => …)   // phát khi start / end
 }
@@ -254,7 +255,7 @@ Bảng "Theo dõi xe" của khách **không** hiện "Trạm tiếp theo" (khác
 - Tài xế thứ `i` (0..3) của một tuyến có các chuyến xuất bến lúc `05:00 + i×15 phút + k×60 phút`, với `k = 0..16`. Chiều chạy là `(i + k) % 2 === 0 → 1`, ngược lại là `2`.
 - Kết quả:
   - mỗi tuyến có một chuyến cứ 15 phút, các chiều xen kẽ nhau;
-  - **mỗi chiều có một chuyến cứ 30 phút**;
+  - **mỗi chiều trung bình 30 phút một chuyến (khoảng cách thực 15–45 phút)**;
   - mỗi tài xế khoảng 17 chuyến/ngày, đổi chiều sau mỗi chuyến.
 - Vẫn upsert idempotent: giữ `vehicle_tracking_logs`, thay mới `schedules` của xe seed, xóa bản ghi thừa.
 
@@ -338,11 +339,12 @@ Bảng "Theo dõi xe" của khách **không** hiện "Trạm tiếp theo" (khác
 | `backend/src/sockets/index.js` | tạo registry, nối vào cả hai namespace |
 | `backend/scripts/seed_drivers.js` | 4 tài xế/tuyến, nhiều chuyến mỗi ngày |
 | `simulator/src/virtual-driver.js` | `pickSchedule`, `nextSchedule`, tự đổi chuyến |
+| `simulator/src/schedule.js` | mới |
 | `frontend/src/modules/realtime/realtime.service.js` | nhận `token`, trả socket để emit |
 | `frontend/src/views/map/features/trip-finder/trip-watch.js` | mới |
 | `frontend/src/views/map/features/trip-finder/trip-finder.js` | danh sách chuyến dưới thẻ tuyến |
 | `frontend/src/views/map/features/fleet-tracking.js` | chế độ khách: một xe, bảng theo dõi có ETA |
 | `frontend/src/views/map/features/staff-auth.js` | kết nối lại socket khi đăng nhập/đăng xuất |
-| `frontend/src/views/driver/features/drive-map.js` | token + `trip:watch` |
+| `frontend/src/views/driver/features/drive-map.js` | token (room `vehicle:<id>`) |
 | CSS bản đồ | style dòng chuyến, nhãn trạng thái, dòng mờ |
 | Test và tài liệu | như Mục 7–8 |

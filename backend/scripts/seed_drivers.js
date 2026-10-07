@@ -46,7 +46,7 @@ const toTime = s =>
   [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map(n => String(n).padStart(2, "0")).join(":");
 
 // Tài xế thứ slot của tuyến: xuất bến 05:00 + slot×15' + k×60', đổi chiều sau mỗi chuyến
-// → mỗi tuyến có chuyến 15 phút một lần, mỗi chiều 30 phút một lần
+// → mỗi tuyến có chuyến 15 phút một lần, mỗi chiều trung bình 30 phút một lần
 function buildSchedules(routeId, vehicleId, slot) {
   return Array.from({ length: TRIPS_PER_DRIVER }, (_, k) => [
     routeId,
