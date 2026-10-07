@@ -29,7 +29,7 @@ export function apiUrl(path) {
 /**
  * Gọi REST API và trả về JSON đã parse.
  * @param {string} path   Đường dẫn sau /api/v1 (VD: "/routes")
- * @param {object} opts   { method, body, auth } — auth: gửi kèm Bearer token
+ * @param {object} opts   { method, body, auth, tokenKey } — auth: gửi kèm Bearer token (lấy theo tokenKey, mặc định token nhân viên)
  */
 export async function request(path, opts = {}) {
   const res = await send(path, opts);
@@ -42,11 +42,11 @@ export async function requestBlob(path, opts = {}) {
   return res.blob();
 }
 
-async function send(path, { method = "GET", body, auth = false } = {}) {
+async function send(path, { method = "GET", body, auth = false, tokenKey } = {}) {
   const headers = {};
   if (auth) {
     headers["Content-Type"] = "application/json";
-    headers["Authorization"] = `Bearer ${getToken()}`;
+    headers["Authorization"] = `Bearer ${getToken(tokenKey)}`;
   }
   if (body !== undefined) headers["Content-Type"] = "application/json";
 

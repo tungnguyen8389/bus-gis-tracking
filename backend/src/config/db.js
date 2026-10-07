@@ -2,6 +2,7 @@ const mysql = require("mysql2/promise");
 const fs = require("fs");
 const path = require("path");
 const { DB } = require("./env");
+const { migrateDriverSchema } = require("./migrations");
 
 // --------------------------------------------------------------------
 // KẾT NỐI VÀ TỰ ĐỘNG KHỞI TẠO CSDL
@@ -43,7 +44,12 @@ async function initDatabase() {
       }
     }
 
-    conn.release();
+    // DB tạo từ schema cũ → bổ sung vai trò DRIVER và vehicles.driver_user_id
+    try {
+      await migrateDriverSchema(conn);
+    } finally {
+      conn.release();
+    }
   } catch (err) {
     console.warn(">>> [Database Cảnh báo] Kiểm tra CSDL:", err.message);
   }

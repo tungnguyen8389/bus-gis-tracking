@@ -1,0 +1,15 @@
+{
+  "name": "bus-gis-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tài xế ảo phát GPS cho demo Web GIS xe buýt. Độc lập với backend: chỉ dùng REST public + socket /device. Xóa thư mục này khi triển khai thật.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test:unit": "node --test \"src/**/*.test.js\""
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "socket.io-client": "^4.7.5"
+  }
+}

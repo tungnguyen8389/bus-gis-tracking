@@ -8,9 +8,10 @@ import { showToast } from "../../../core/toast.js";
 import { getToken, setToken, clearToken } from "../../../core/session.js";
 import { ApiError } from "../../../core/http.js";
 import { clearRouteGraphics } from "./base-map.js";
-import { applyFleetFilter } from "./fleet-tracking.js";
+import { applyFleetFilter, connectFleetSocket } from "./fleet-tracking.js";
 import { loadRoutesList, resetDirection } from "./route-browser.js";
-import { loadStopIndex, hasStopIndex, clearTripLayer } from "./trip-finder/trip-finder.js";
+import { loadStopIndex, hasStopIndex, clearTripLayer, resetTripFinderState } from "./trip-finder/trip-finder.js";
+import { resetTripWatch } from "./trip-finder/trip-watch.js";
 import { isStaffRole, login, getCurrentUser } from "../../../modules/auth/auth.service.js";
 
 async function getStaffUser() {
@@ -35,6 +36,14 @@ function applyAuthState(user) {
   show("btnBottomAdminLink", isStaff, "block");
   show("routeControlPanel", isStaff);
   show("guestTripPanel", !isStaff);
+  // Bảng "Theo dõi xe": nhân viên luôn thấy; khách chỉ thấy khi đang theo dõi 1 chuyến
+  show("fleetDashboard", isStaff, "block");
+  show("nextStopBlock", isStaff, "block");
+  show("guestTripInfo", false, "block");
+  state.isStaff = isStaff;
+  resetTripWatch();
+  resetTripFinderState();
+  connectFleetSocket(isStaff ? getToken() : null);
 
   clearTripLayer();
   if (isStaff) {
@@ -45,6 +54,8 @@ function applyAuthState(user) {
     state.currentSelectedRoute = "ALL";
     state.currentRawStops = [];
     clearRouteGraphics();
+    document.querySelectorAll("#tripResults .trip-card.active").forEach(c => c.classList.remove("active"));
+    document.querySelectorAll("#tripResults .trip-schedules").forEach(el => el.remove());
     applyFleetFilter();
     if (state.allRoutes.length === 0) loadRoutesList(false);
     if (!hasStopIndex()) loadStopIndex();

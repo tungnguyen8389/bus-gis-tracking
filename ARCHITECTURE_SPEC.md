@@ -1,13 +1,18 @@
 # TỔNG HỢP MÃ NGUỒN ĐỒ ÁN HỆ THỐNG THÔNG TIN ĐỊA LÝ (IE402)
 ## ĐỀ TÀI: QUẢN LÝ VÀ GIÁM SÁT HÀNH TRÌNH XE BUÝT 2D TRÊN NỀN WEB GIS
 
+> **Lưu ý:** Tài liệu này là bản tổng hợp mã nguồn giai đoạn đầu, chưa cập nhật theo cấu trúc hiện tại.
+> Hub realtime nay nằm ở `backend/src/sockets/`: `/device` cho tài xế đã xác thực phát GPS; `/` phát theo room (`trip:<schedule_id>` cho khách đã chọn chuyến, `vehicle:<id>` cho trang tài xế, `staff` cho nhân viên, `route:<id>:<dir>` cho danh sách chuyến + ETA). Mã `io.emit` bên dưới là phiên bản cũ, giữ để đối chiếu.
+> Bộ giả lập đã tách thành thư mục độc lập `simulator/`.
+> Xem [README.md](README.md) và [docs/superpowers/specs/2026-10-04-socket-security-driver-design.md](docs/superpowers/specs/2026-10-04-socket-security-driver-design.md).
+
 ---
 
 ## MỤC LỤC TẬP TIN NGUỒN
 1. `database/schema.sql` - Lược đồ tạo bảng và nạp dữ liệu không gian MySQL 8.x Spatial
 2. `backend/package.json` - Cấu hình thư viện Node.js (Express, Socket.io, MySQL2)
 3. `backend/server.js` - Máy chủ RESTful API & WebSocket Realtime Broadcast
-4. `backend/simulator.js` - Tiến trình giả lập GPS phát tọa độ xe buýt di chuyển
+4. `backend/simulator.js` - *(đã thay bằng thư mục `simulator/` độc lập)* Tiến trình giả lập GPS phát tọa độ xe buýt di chuyển
 5. `frontend/index.html` - Màn hình chính tích hợp ArcGIS Maps SDK v4.29 & Dashboard
 6. `tools/coordinate_picker.html` - Công cụ Click lấy tọa độ trạm/lộ trình (Coordinate Picker)
 7. `tools/google_maps_importer.html` - Công cụ chuyển đổi tọa độ Google Maps sang ArcGIS

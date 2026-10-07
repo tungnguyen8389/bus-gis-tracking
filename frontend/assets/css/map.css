@@ -275,6 +275,34 @@ html, body, #viewDiv {
 .trip-step { display: flex; gap: 8px; align-items: baseline; margin-top: 3px; }
 .trip-step i { width: 14px; text-align: center; color: #64748b; }
 .trip-empty { padding: 12px; color: #94a3b8; text-align: center; font-size: 12.5px; }
+.trip-schedules {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: default;
+}
+.trip-schedule {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  background: #f8fafc;
+}
+.trip-schedule:hover { border-color: #0079c1; }
+.trip-schedule.active { border-color: #0079c1; background: #eff6ff; }
+.trip-schedule.passed { opacity: 0.5; cursor: not-allowed; }
+.trip-schedule.passed:hover { border-color: #e2e8f0; }
+.trip-schedule-main { color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trip-schedule-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; font-size: 11px; }
+.trip-status { font-weight: 700; border-radius: 4px; padding: 0 6px; }
+.trip-status.running { background: #dcfce7; color: #166534; }
+.trip-status.upcoming { background: #e0f2fe; color: #075985; }
+.trip-status.passed { background: #f1f5f9; color: #64748b; }
+.trip-eta { color: #0369a1; font-weight: 600; }
 .suggest-section {
   padding: 5px 12px;
   font-size: 10.5px;

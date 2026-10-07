@@ -5,6 +5,13 @@ import { connectRealtime } from "../../../modules/realtime/realtime.service.js";
 // WEBSOCKET GPS REALTIME & TÍNH TOÁN TRẠM TIẾP THEO
 // --------------------------------------------------------------------
 let socketInstance = null;
+// Hook cho các feature khác (trip-watch của khách) mà không import vòng
+const fleetListeners = { connect: [], offline: [], tripsUpdate: [], location: [] };
+export function onFleetEvent(name, fn) {
+  fleetListeners[name].push(fn);
+}
+const emitFleetEvent = (name, data) => fleetListeners[name].forEach(fn => fn(data));
+export const getFleetSocket = () => socketInstance;
 
 // --------------------------------------------------------------------
 // BỘ ĐIỀU KHIỂN HOẠT HỌA XE BUÝT 60 FPS SIÊU MƯỢT (NATIVE WEB MERCATOR)
@@ -20,6 +27,20 @@ export function applyFleetFilter() {
     if (g && g.attributes) {
       g.visible = (state.currentSelectedRoute === "ALL" || g.attributes.route_id === state.currentSelectedRoute);
     }
+  });
+}
+
+// Gỡ mọi xe khỏi bản đồ (đổi vai trò, khách đổi chuyến theo dõi)
+export function clearFleet() {
+  if (map.fleetLayer) map.fleetLayer.removeAll();
+  Object.keys(state.busGraphics).forEach(id => delete state.busGraphics[id]);
+  Object.keys(busAnimStates).forEach(id => delete busAnimStates[id]);
+  Object.keys(busCurrentPositions).forEach(id => delete busCurrentPositions[id]);
+  state.selectedTrackedVehicleId = null;
+  // Xóa số liệu của xe trước để không lưu lại trên bảng
+  ["busSpeed", "busCoord"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerText = "--";
   });
 }
 
@@ -136,6 +157,9 @@ function renderTrackedVehicle(data, rName) {
 
 function onFleetLocationUpdate(data) {
   if (!data || !data.vehicle_id || !map.fleetLayer) return;
+  // Khách chỉ hiện đúng chuyến đang theo dõi (server đã lọc theo room; chặn thêm ở client)
+  if (!state.isStaff && (state.watchedScheduleId == null || data.schedule_id !== state.watchedScheduleId)) return;
+  emitFleetEvent("location", data);   // trip-watch dùng để biết chuyến đã chạy lại
   const busGraphics = state.busGraphics;
   const mapView = map.view;
 
@@ -258,15 +282,37 @@ function onFleetLocationUpdate(data) {
   }
 }
 
-export function initSocketRealtime() {
+// Xe kết thúc chuyến hoặc thiết bị mất kết nối → gỡ khỏi bản đồ và xóa cache hoạt họa
+function onVehicleOffline({ vehicle_id, schedule_id } = {}) {
+  const g = state.busGraphics[vehicle_id];
+  if (g && map.fleetLayer) map.fleetLayer.remove(g);
+  delete state.busGraphics[vehicle_id];
+  delete busAnimStates[vehicle_id];
+  delete busCurrentPositions[vehicle_id];
+  if (state.selectedTrackedVehicleId === vehicle_id) state.selectedTrackedVehicleId = null;
+  emitFleetEvent("offline", { vehicle_id, schedule_id });
+}
+
+// Kết nối (lại) theo vai trò: nhân viên gửi token để vào room staff, khách kết nối không token.
+// Mỗi lần đổi vai trò dùng socket mới → không còn giữ room của vai trò cũ.
+export function connectFleetSocket(token) {
+  if (socketInstance) socketInstance.disconnect();
+  clearFleet();
   try {
-    if (socketInstance) return;
     socketInstance = connectRealtime({
-      onConnect: () => setConnectionStatus("ONLINE", "badge-status"),
+      token,
+      onConnect: () => {
+        setConnectionStatus("ONLINE", "badge-status");
+        emitFleetEvent("connect");
+      },
       onDisconnect: () => setConnectionStatus("OFFLINE", "badge-status badge-disconnected"),
-      onFleetUpdate: onFleetLocationUpdate
+      onFleetUpdate: onFleetLocationUpdate,
+      onVehicleOffline,
+      onTripsUpdate: data => emitFleetEvent("tripsUpdate", data)
     });
   } catch (err) {
     console.warn("Lỗi kết nối Socket:", err);
+    socketInstance = null;
   }
+  return socketInstance;
 }

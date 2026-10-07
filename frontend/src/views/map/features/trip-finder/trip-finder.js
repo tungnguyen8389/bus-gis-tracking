@@ -12,6 +12,7 @@ import { clipPathBetween } from "./path-clip.js";
 import { listStops } from "../../../../modules/stops/stops.service.js";
 import { planTrip } from "../../../../modules/trip-plan/trip-plan.service.js";
 import { getRoutePath, flattenPathCoords } from "../../../../modules/paths/paths.service.js";
+import { subscribeTrips, watchTrip, clearTripWatch, onTripWatchChange, getWatchedTrip } from "./trip-watch.js";
 
 let lastTripResults = [];
 
@@ -106,6 +107,9 @@ function addTripMarker(longitude, latitude, color, title, content) {
 }
 
 async function selectDestination(stop) {
+  // Bỏ theo dõi ngay: xe và bảng biến mất, không còn ở trong room khi đang tìm tuyến mới
+  clearTripWatch();
+  activeTripResult = null;
   document.getElementById("destInput").value = stop.stop_name;
   document.getElementById("destSuggestions").style.display = "none";
 
@@ -129,8 +133,93 @@ async function selectDestination(stop) {
   }
 }
 
+const STATUS_LABEL = { RUNNING: "Đang chạy", UPCOMING: "Sắp xuất bến", PASSED: "Đã qua trạm của bạn" };
+let activeTripResult = null;
+export const resetTripFinderState = () => { activeTripResult = null; };
+
+const formatClock = iso =>
+  new Date(iso).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Ho_Chi_Minh" });
+const etaText = t => (t.eta_board ? `~${formatClock(t.eta_board)} (${t.minutes_to_board} phút)` : "");
+
+function renderTripSchedules({ trips, watchedScheduleId, error }) {
+  const list = document.querySelector("#tripResults .trip-card.active .trip-schedules");
+  if (!list) return;
+  if (error) {
+    list.innerHTML = `<li class="trip-empty">Không tải được danh sách chuyến</li>`;
+    return;
+  }
+  if (trips.length === 0) {
+    list.innerHTML = `<li class="trip-empty">Hiện không có chuyến nào trong 2 giờ tới</li>`;
+    return;
+  }
+  list.innerHTML = "";
+  trips.forEach(t => {
+    const li = document.createElement("li");
+    const passed = t.status === "PASSED";
+    li.className = `trip-schedule${passed ? " passed" : ""}${t.schedule_id === watchedScheduleId ? " active" : ""}`;
+    li.innerHTML = `
+      <div class="trip-schedule-main"><b>${escapeHtml(t.departure_time)}</b> · ${escapeHtml(t.plate_number)} · ${escapeHtml(t.driver_name || "")}</div>
+      <div class="trip-schedule-meta">
+        <span class="trip-status ${t.status.toLowerCase()}">${STATUS_LABEL[t.status]}</span>
+        <span class="trip-eta">${escapeHtml(etaText(t))}</span>
+      </div>`;
+    if (!passed) {
+      li.onclick = e => {
+        e.stopPropagation();
+        watchTrip(t.schedule_id);
+      };
+    }
+    list.appendChild(li);
+  });
+}
+
+// Bảng "Theo dõi xe" của khách: chỉ hiện khi đang theo dõi 1 chuyến
+function renderGuestDashboard({ watchedScheduleId, ended }) {
+  if (state.isStaff) return;
+  const visible = watchedScheduleId !== null;
+  document.getElementById("fleetDashboard").style.display = visible ? "block" : "none";
+  document.getElementById("guestTripInfo").style.display = visible ? "block" : "none";
+  if (!visible) return;
+
+  const trip = getWatchedTrip();
+  if (activeTripResult) document.getElementById("busRouteName").innerText = `Tuyến ${activeTripResult.route_number}`;
+  if (trip) {
+    document.getElementById("busPlate").innerText = trip.plate_number;
+    document.getElementById("busDriver").innerText = trip.driver_name || "--";
+    document.getElementById("busDeparture").innerText = trip.departure_time;
+  }
+  let eta = "--";
+  if (ended) eta = "Chuyến đã kết thúc";
+  else if (trip && trip.status === "PASSED") eta = "Xe đã qua trạm của bạn";
+  else if (trip && trip.status === "UPCOMING") eta = `Chưa xuất bến — dự kiến ${trip.departure_time}${trip.eta_board ? ` · tới trạm ${etaText(trip)}` : ""}`;
+  else if (trip && trip.eta_board) eta = etaText(trip);
+  document.getElementById("busEta").innerText = eta;
+}
+
+onTripWatchChange(change => {
+  renderTripSchedules(change);
+  renderGuestDashboard(change);
+});
+
+function openTripList(card, result) {
+  document.querySelectorAll("#tripResults .trip-schedules").forEach(el => el.remove());
+  const list = document.createElement("ul");
+  list.className = "trip-schedules";
+  list.innerHTML = `<li class="trip-empty"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải chuyến...</li>`;
+  card.appendChild(list);
+  activeTripResult = result;
+  ["busPlate", "busDriver", "busDeparture", "busSpeed"].forEach(id => { document.getElementById(id).innerText = "--"; });
+  subscribeTrips({
+    route_id: result.route_id,
+    direction: result.direction,
+    board_stop_id: result.board_stop ? result.board_stop.stop_id : null
+  });
+}
+
 function renderTripResults(data, position) {
   lastTripResults = data.results || [];
+  clearTripWatch();
+  activeTripResult = null;
   const resultsEl = document.getElementById("tripResults");
   document.getElementById("tripResultsCount").innerText = `${lastTripResults.length} tuyến`;
 
@@ -173,9 +262,12 @@ function renderTripResults(data, position) {
       ${boardStep}
       <div class="trip-step"><i class="fa-solid fa-flag-checkered"></i><span>Xuống tại <b>${escapeHtml(r.alight_stop.stop_name)}</b>${alightWalk}</span></div>`;
     li.onclick = () => {
+      if (li.classList.contains("active")) return;   // bấm lại thẻ đang mở (vd. vùng trống của danh sách chuyến)
       resultsEl.querySelectorAll(".trip-card").forEach(c => c.classList.remove("active"));
       li.classList.add("active");
+      clearTripWatch();
       showTripOnMap(lastTripResults[idx], data.destination, position);
+      openTripList(li, lastTripResults[idx]);
     };
     resultsEl.appendChild(li);
   });

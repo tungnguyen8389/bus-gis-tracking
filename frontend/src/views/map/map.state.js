@@ -7,6 +7,8 @@ export const state = {
   currentDirection: 1,
   userPosition: null,           // { latitude, longitude, accuracy, time }
   selectedTrackedVehicleId: null,
+  isStaff: false,
+  watchedScheduleId: null,      // Chuyến khách đang theo dõi (khách chỉ thấy đúng 1 xe này)
   busGraphics: {}               // vehicle_id → Graphic xe buýt trên fleetLayer
 };
 

@@ -4,8 +4,11 @@ const cors = require("cors");
 
 const ROOT_DIR = path.join(__dirname, "..", "..");
 
+const { CORS_ORIGIN } = require("./config/env");
+
 const app = express();
-app.use(cors());
+// Frontend được phục vụ cùng origin → chỉ bật CORS khi khai báo CORS_ORIGIN (vd. chạy frontend ở cổng khác)
+if (CORS_ORIGIN) app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
@@ -17,6 +20,7 @@ app.get("/", (req, res) => res.redirect("/frontend/index.html"));
 // Mỗi module tự khai báo đường dẫn con đầy đủ dưới /api/v1
 const modules = [
   require("./modules/auth/auth.routes"),
+  require("./modules/driver/driver.routes"),
   require("./modules/users/users.routes"),
   require("./modules/bus-routes/bus-routes.routes"),
   require("./modules/paths/paths.routes"),

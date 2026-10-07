@@ -69,6 +69,43 @@ function fetchJson(url, options = {}) {
   });
 }
 
+const DRIVER_PASSWORD = process.env.SEED_DRIVER_PASSWORD || "driver123";
+
+function driverLogin(username, password = DRIVER_PASSWORD) {
+  return fetchJson(`${API_BASE}/auth/driver/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: { username, password }
+  });
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Chờ sự kiện thỏa điều kiện; hết giờ → reject
+function waitFor(socket, event, match = () => true, ms = 3000) {
+  return new Promise((resolve, reject) => {
+    const handler = data => {
+      if (!match(data)) return;
+      clearTimeout(timer);
+      socket.off(event, handler);
+      resolve(data);
+    };
+    const timer = setTimeout(() => {
+      socket.off(event, handler);
+      reject(new Error(`Timeout ${ms}ms chờ '${event}'`));
+    }, ms);
+    socket.on(event, handler);
+  });
+}
+
+// true nếu KHÔNG nhận sự kiện thỏa điều kiện trong ms
+const expectNone = (socket, event, match, ms = 1000) => waitFor(socket, event, match, ms).then(() => false, () => true);
+
+const waitConnect = socket => new Promise((resolve, reject) => {
+  socket.once("connect", resolve);
+  socket.once("connect_error", reject);
+});
+
 async function runTestSuite() {
   console.log("\n=======================================================================");
   console.log("   KIỂM THỬ HỆ THỐNG WEB GIS XE BUÝT 2D TRƯỚC DEMO (AUTOMATED TEST)   ");
@@ -187,6 +224,46 @@ async function runTestSuite() {
       logPass("Bảo mật RBAC (Manager tạo User)", "Bị chặn với mã 403 Forbidden chính xác");
     } else {
       logFail("Bảo mật RBAC (Manager tạo User)", `Lỗ hổng bảo mật! Nhận status: ${managerAccessUsers.status}`);
+    }
+
+    // 2.5 Tài khoản tài xế: chỉ đăng nhập ở cổng tài xế, không gọi được API quản trị
+    const driver = await driverLogin("driver01");
+    if (driver.status === 200 && driver.data.user.role === "DRIVER" && driver.data.user.vehicle_id) {
+      logPass("Đăng nhập Tài xế (/auth/driver/login)", `driver01 → xe ${driver.data.user.vehicle_id}`);
+    } else {
+      logFail("Đăng nhập Tài xế", `Status ${driver.status} (đã chạy npm run db:seed-drivers chưa?)`);
+    }
+
+    const driverAtStaff = await fetchJson(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: { username: "driver01", password: DRIVER_PASSWORD }
+    });
+    const adminAtDriver = await driverLogin("admin", "admin123");
+    if (driverAtStaff.status === 403 && adminAtDriver.status === 403) {
+      logPass("Tách cổng đăng nhập", "Tài xế bị chặn ở cổng nhân viên và ngược lại (403)");
+    } else {
+      logFail("Tách cổng đăng nhập", `driver@staff=${driverAtStaff.status}, admin@driver=${adminAtDriver.status}`);
+    }
+
+    const driverAuth = { "Content-Type": "application/json", "Authorization": `Bearer ${driver.data.token}` };
+    const driverWrite = await fetchJson(`${API_BASE}/routes`, { method: "POST", headers: driverAuth, body: { route_id: "HACK" } });
+    const driverExport = await fetchJson(`${API_BASE}/export/json`, { headers: driverAuth });
+    if (driverWrite.status === 403 && driverExport.status === 403) {
+      logPass("Bảo mật RBAC (Tài xế gọi API quản trị)", "POST /routes và GET /export/json bị chặn 403");
+    } else {
+      logFail("Bảo mật RBAC (Tài xế gọi API quản trị)", `POST /routes=${driverWrite.status}, GET /export/json=${driverExport.status}`);
+    }
+
+    const badRole = await fetchJson(`${API_BASE}/users/0`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${adminToken}` },
+      body: { full_name: "x", email: "", role: "SUPERUSER" }
+    });
+    if (badRole.status === 400) {
+      logPass("Whitelist vai trò người dùng", "role SUPERUSER bị từ chối 400");
+    } else {
+      logFail("Whitelist vai trò người dùng", `Mong đợi 400 nhưng nhận ${badRole.status}`);
     }
   } catch (err) {
     logFail("Module Auth & RBAC", err.message);
@@ -321,58 +398,117 @@ async function runTestSuite() {
   }
 
   // ------------------------------------------------------------------
-  // 4. KIỂM TRA WEBSOCKET REALTIME & LUỒNG GPS GIẢ LẬP
+  // 4. KIỂM TRA WEBSOCKET: VIEWER "/" (CHỈ NHẬN) + THIẾT BỊ TÀI XẾ "/device"
+  //    Cần seed ≥ 2 tài xế: npm run db:seed-drivers
   // ------------------------------------------------------------------
-  console.log("\n\x1b[36m▶ [MODULE 4]: Kiểm Tra WebSocket Realtime & Luồng GPS Simulator\x1b[0m");
+  console.log("\n\x1b[36m▶ [MODULE 4]: Kiểm Tra WebSocket Realtime (viewer + /device tài xế)\x1b[0m");
+  const sockets = [];
+  const openSocket = (nsp, auth = {}) => {
+    const s = io(`${SOCKET_URL}${nsp}`, { auth, reconnection: false, forceNew: true, timeout: 4000 });
+    sockets.push(s);
+    return s;
+  };
   try {
-    await new Promise((resolve) => {
-      const socketClient = io(SOCKET_URL, { timeout: 4000 });
-      let receivedGps = false;
+    const d1 = await driverLogin("driver01");
+    const d2 = await driverLogin("driver02");
+    if (d1.status !== 200 || d2.status !== 200) {
+      throw new Error(`Chưa seed tài xế (driver01=${d1.status}, driver02=${d2.status}) → chạy npm run db:seed-drivers`);
+    }
+    const auth1 = { "Authorization": `Bearer ${d1.data.token}` };
+    const auth2 = { "Authorization": `Bearer ${d2.data.token}` };
+    const sch1 = (await fetchJson(`${API_BASE}/driver/me`, { headers: auth1 })).data.schedules[0];
+    const sch2 = (await fetchJson(`${API_BASE}/driver/me`, { headers: auth2 })).data.schedules[0];
+    const vehicleId = d1.data.user.vehicle_id;
 
-      socketClient.on("connect", () => {
-        logPass("Kết nối WebSocket Hub", `Đã kết nối Socket.io tại ${SOCKET_URL}`);
+    // Nhân viên nhận mọi xe (room staff); khách chỉ nhận chuyến mình trip:watch
+    const viewer = openSocket("", { token: adminToken });
+    const guest = openSocket("");
+    await Promise.all([waitConnect(viewer), waitConnect(guest)]);
+    logPass("Kết nối viewer '/'", `Nhân viên + khách đã kết nối Socket.io tại ${SOCKET_URL}`);
 
-        // Gửi thử gói tin định vị mẫu
-        socketClient.emit("gps_ping", {
-          vehicle_id: "BUS_TEST_VERIFY",
-          plate_number: "51B-999.99",
-          route_id: "1",
-          longitude: 106.80196,
-          latitude: 10.87052,
-          speed_kmh: 35,
-          heading: 90
-        });
-      });
+    // 4.1 /device không token / token nhân viên
+    const noToken = await waitConnect(openSocket("/device")).then(() => "connected", e => e.message);
+    const staffToken = await waitConnect(openSocket("/device", { token: adminToken })).then(() => "connected", e => e.message);
+    if (noToken === "UNAUTHORIZED" && staffToken === "UNAUTHORIZED") {
+      logPass("Bảo mật /device", "Không token và token ADMIN đều bị từ chối UNAUTHORIZED");
+    } else {
+      logFail("Bảo mật /device", `không token=${noToken}, token ADMIN=${staffToken}`);
+    }
 
-      socketClient.on("fleet_location_update", (data) => {
-        if (!receivedGps) {
-          receivedGps = true;
-          if (data && data.longitude && data.latitude && data.vehicle_id) {
-            logPass("Nhận Luồng GPS Realtime ('fleet_location_update')", `Xe: ${data.plate_number || data.vehicle_id} | Tọa độ: [${data.longitude}, ${data.latitude}] | Vận tốc: ${data.speed_kmh} km/h`);
-          } else {
-            logFail("Nhận Luồng GPS Realtime", "Gói tin không đầy đủ thuộc tính tọa độ");
-          }
-          socketClient.disconnect();
-          resolve();
-        }
-      });
+    // 4.2 Viewer phát gps_ping giả → không ai nhận
+    const viewer2 = openSocket("");
+    await waitConnect(viewer2);
+    const noLeak = expectNone(viewer, "fleet_location_update", d => d.vehicle_id === "BUS_FAKE");
+    viewer2.emit("gps_ping", { vehicle_id: "BUS_FAKE", latitude: 10.87, longitude: 106.8 });
+    if (await noLeak) logPass("Viewer không phát được GPS", "gps_ping từ namespace '/' bị bỏ qua");
+    else logFail("Viewer không phát được GPS", "Gói giả từ viewer bị phát lại!");
 
-      socketClient.on("connect_error", (err) => {
-        logFail("Kết nối WebSocket Hub", err.message);
-        socketClient.disconnect();
-        resolve();
-      });
+    // 4.3 Thiết bị tài xế: lịch trình xe khác bị từ chối, lịch trình của mình được nhận
+    const dev = openSocket("/device", { token: d1.data.token });
+    await waitConnect(dev);
+    const badTrip = await dev.timeout(3000).emitWithAck("trip:start", { schedule_id: sch2.schedule_id });
+    if (badTrip.ok === false && badTrip.error === "SCHEDULE_NOT_ALLOWED") {
+      logPass("trip:start lịch trình xe khác", "Bị từ chối SCHEDULE_NOT_ALLOWED");
+    } else {
+      logFail("trip:start lịch trình xe khác", JSON.stringify(badTrip));
+    }
 
-      setTimeout(() => {
-        if (!receivedGps) {
-          logFail("Nhận Luồng GPS Realtime", "Hết thời gian chờ (Timeout 4s) không nhận được broadcast GPS từ server");
-          socketClient.disconnect();
-          resolve();
-        }
-      }, 4000);
-    });
+    const trip = await dev.timeout(3000).emitWithAck("trip:start", { schedule_id: sch1.schedule_id });
+    const gotLocation = waitFor(viewer, "fleet_location_update", d => d.vehicle_id === vehicleId);
+    const guestSilent = expectNone(guest, "fleet_location_update", d => d.vehicle_id === vehicleId);
+    dev.emit("gps_ping", { vehicle_id: "DRV_99", latitude: 10.87052, longitude: 106.80196, speed_kmh: 35, heading: 90 });
+    const loc = await gotLocation;
+    if (trip.ok && loc.vehicle_id === vehicleId && loc.route_id === sch1.route_id && loc.schedule_id === sch1.schedule_id && loc.timestamp) {
+      logPass("Luồng GPS tài xế → nhân viên", `Xe ${loc.plate_number} | Tuyến ${loc.route_number} | chuyến ${loc.schedule_id} (vehicle_id giả bị bỏ)`);
+    } else {
+      logFail("Luồng GPS tài xế → nhân viên", JSON.stringify({ trip, loc }));
+    }
+    if (await guestSilent) logPass("Khách chưa chọn chuyến", "Không nhận vị trí xe nào");
+    else logFail("Khách chưa chọn chuyến", "Khách nhận được vị trí khi chưa trip:watch!");
+
+    // 4.3b Khách xem danh sách chuyến của tuyến (không tọa độ) rồi theo dõi đúng chuyến đang chạy
+    const subscribed = await guest.timeout(3000).emitWithAck("trips:subscribe", { route_id: sch1.route_id, direction: sch1.direction });
+    const listed = subscribed.ok && subscribed.trips.find(x => x.schedule_id === sch1.schedule_id);
+    if (listed && listed.status === "RUNNING" && !/longitude|latitude/.test(JSON.stringify(subscribed.trips))) {
+      logPass("trips:subscribe", `${subscribed.trips.length} chuyến, chuyến ${sch1.schedule_id} đang chạy, không lộ tọa độ`);
+    } else {
+      logFail("trips:subscribe", JSON.stringify(subscribed));
+    }
+    const watched = await guest.timeout(3000).emitWithAck("trip:watch", { schedule_id: sch1.schedule_id });
+    await sleep(300);
+    const guestLocation = waitFor(guest, "fleet_location_update", d => d.vehicle_id === vehicleId);
+    dev.emit("gps_ping", { latitude: 10.8706, longitude: 106.8020, speed_kmh: 35, heading: 90 });
+    const guestLoc = await guestLocation;
+    if (watched.ok && guestLoc.schedule_id === sch1.schedule_id) {
+      logPass("trip:watch", `Khách nhận đúng xe ${guestLoc.plate_number} của chuyến ${sch1.schedule_id}`);
+    } else {
+      logFail("trip:watch", JSON.stringify({ watched, guestLoc }));
+    }
+
+    // 4.4 Gói sai định dạng không được phát
+    await sleep(300);
+    const noInvalid = expectNone(viewer, "fleet_location_update", d => d.vehicle_id === vehicleId);
+    dev.emit("gps_ping", { latitude: 999, longitude: 106.8 });
+    if (await noInvalid) logPass("Validate gói GPS", "latitude = 999 bị bỏ");
+    else logFail("Validate gói GPS", "Gói sai định dạng vẫn được phát");
+
+    // 4.5 Phiên thứ hai cùng xe thay phiên cũ
+    const replaced = waitFor(dev, "session:replaced");
+    const dev2 = openSocket("/device", { token: d1.data.token });
+    await waitConnect(dev2);
+    await replaced;
+    logPass("Một xe một phiên", "Phiên cũ nhận session:replaced");
+
+    // 4.6 Kết thúc chuyến → viewer nhận vehicle_offline
+    await dev2.timeout(3000).emitWithAck("trip:start", { schedule_id: sch1.schedule_id });
+    const offline = waitFor(viewer, "vehicle_offline", d => d.vehicle_id === vehicleId);
+    await dev2.timeout(3000).emitWithAck("trip:end", {});
+    await offline;
+    logPass("Kết thúc chuyến", `Nhân viên nhận vehicle_offline cho ${vehicleId}`);
   } catch (err) {
     logFail("Module WebSocket Realtime", err.message);
+  } finally {
+    sockets.forEach(s => s.disconnect());
   }
 
   // ------------------------------------------------------------------
@@ -382,6 +518,7 @@ async function runTestSuite() {
   const frontendFiles = [
     { path: path.join(__dirname, "../frontend/index.html"), name: "Màn hình Bản đồ Giám sát 2D (frontend/index.html)" },
     { path: path.join(__dirname, "../frontend/admin.html"), name: "Cổng Quản trị Admin Portal (frontend/admin.html)" },
+    { path: path.join(__dirname, "../frontend/driver.html"), name: "Trang Tài xế (frontend/driver.html)" },
     { path: path.join(__dirname, "../tools/get_coords_1.html"), name: "Bộ trích xuất lộ trình & trạm (tools/get_coords_1.html)" }
   ];
 
