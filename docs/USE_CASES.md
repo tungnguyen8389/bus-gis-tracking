@@ -13,7 +13,7 @@ Hệ thống gồm ba giao diện và một kênh realtime:
 | Bản đồ công khai | `frontend/index.html` → `src/views/map/` | Hành khách (không đăng nhập) và nhân viên |
 | Trang quản trị (Admin Portal) | `frontend/admin.html` → `src/views/admin/` | ADMIN, MANAGER |
 | REST API | `http://localhost:3000/api/v1` (`backend/src/modules/*`) | Hai trang trên |
-| Hub realtime Socket.io | `backend/src/sockets/` — namespace `/` (viewer, chỉ nhận) và `/device` (tài xế, JWT) | Tài xế / simulator gửi lên, bản đồ nhận về |
+| Hub realtime Socket.io | `backend/src/sockets/` — namespace `/` (viewer: nhận vị trí theo room, gửi đăng ký theo dõi) và `/device` (tài xế, JWT) | Tài xế / simulator gửi lên, bản đồ nhận về |
 | Trang tài xế | `frontend/driver.html` → `src/views/driver/` | Tài xế (DRIVER) |
 | Công cụ dữ liệu ngoại tuyến | `tools/get_coords_1.html`, `tools/google_maps_importer.html`, `npm run db:import / db:export` | Người duy trì dữ liệu |
 
@@ -203,7 +203,7 @@ flowchart LR
   2. Hệ thống tải lộ trình của tuyến theo đúng chiều (`GET /routes/:id/path?direction=`), gộp MultiLineString nếu có.
   3. Cắt polyline từ hình chiếu của trạm lên tới hình chiếu của trạm xuống (tìm điểm cuối chỉ từ đoạn sau điểm đầu, để tuyến vòng không bị cắt sai). Nếu không có trạm lên thì cắt từ đầu tuyến.
   4. Vẽ đoạn đường đi (xanh dương), marker trạm lên (**xanh lá**), trạm xuống (**cam**), điểm đến (đỏ), vị trí khách (xanh dương), rồi zoom vừa toàn bộ.
-  5. Lớp đội xe chỉ hiện xe thuộc tuyến này.
+  5. Lớp đội xe chỉ hiện xe của chuyến khách đang theo dõi (khách không thấy các xe khác của tuyến).
 - **Luồng ngoại lệ:** Khách bấm tuyến khác trong lúc đang tải → kết quả cũ bị bỏ qua. Tuyến không có lộ trình → chỉ hiện các marker.
 - **Code:** `showTripOnMap` trong [trip-finder.js](../frontend/src/views/map/features/trip-finder/trip-finder.js), [path-clip.js](../frontend/src/views/map/features/trip-finder/path-clip.js).
 
@@ -256,7 +256,7 @@ flowchart LR
   1. Hệ thống tải danh sách tuyến (`GET /routes`), hiển thị số lượng tuyến và tự chọn tuyến đầu tiên.
   2. Nhân viên chọn tuyến trong dropdown và chọn **Lượt đi / Lượt về**.
   3. Hệ thống hiển thị tên tuyến, cự ly (km), giãn cách (phút); vẽ lộ trình (polyline xanh) và zoom tới; tải danh sách trạm theo thứ tự (`GET /routes/:id/stops?direction=`) dưới dạng timeline và marker trên bản đồ.
-  4. Lớp đội xe chỉ hiện xe của tuyến đang chọn.
+  4. Lớp đội xe (nhân viên) chỉ hiện xe của tuyến đang chọn.
 - **Luồng thay thế:** Chọn **"Hiển thị Tất cả các Tuyến"** → ẩn nút chọn chiều, không vẽ lộ trình, hiển thị toàn bộ trạm trong hệ thống (`GET /stops`), hiện mọi xe.
 - **Luồng ngoại lệ:** Tuyến chưa có lộ trình hoặc trạm → bỏ qua phần tương ứng, không báo lỗi.
 - **Code:** [route-browser.js](../frontend/src/views/map/features/route-browser.js).
@@ -401,7 +401,7 @@ Tiền điều kiện chung: đã đăng nhập với vai trò ADMIN hoặc MANA
 - **Luồng chính:**
   1. Thiết bị gửi `trip:start { schedule_id }` (có ack). Server kiểm tra lịch trình thuộc xe của tài xế rồi gắn tuyến + chiều vào phiên.
   2. Thiết bị gửi `gps_ping { latitude, longitude, speed_kmh?, heading? }`. Server kiểm tra định dạng/khoảng giá trị, bỏ gói cách gói trước < 250 ms, rồi **tự dựng** gói `{ vehicle_id, plate_number, route_id, route_number, direction, longitude, latitude, speed_kmh, heading, timestamp }` từ phiên đã xác thực (không tin `vehicle_id` client gửi).
-  3. Gói được phát tới mọi viewer qua `fleet_location_update` (phục vụ UC-05).
+  3. Gói được phát qua `fleet_location_update` tới room chuyến (khách đã chọn chuyến), room xe (trang tài xế) và `staff` (phục vụ UC-05).
   4. Ghi `vehicle_tracking_logs` tối đa 1 bản ghi / xe / 5 giây.
   5. `trip:end` hoặc mất kết nối khi đang có chuyến → phát `vehicle_offline { vehicle_id }`, bản đồ gỡ xe.
 - **Luồng ngoại lệ:**
@@ -409,7 +409,7 @@ Tiền điều kiện chung: đã đăng nhập với vai trò ADMIN hoặc MANA
   - Gói sai định dạng → bỏ, server ghi cảnh báo có giới hạn.
   - Phiên mới cùng xe → phiên cũ nhận `session:replaced` và bị ngắt (không phát `vehicle_offline`).
   - Lỗi ghi log → `console.error` có giới hạn; gói vẫn được phát.
-- **Viewer (namespace `/`)** chỉ nhận; server không xử lý sự kiện nào từ viewer.
+- **Viewer (namespace `/`)** không gửi được GPS; chỉ gửi sự kiện đăng ký theo dõi (`trips:subscribe`, `trip:watch`, …).
 - **Code:** [sockets/](../backend/src/sockets/), [simulator/](../simulator/).
 
 #### UC-23 — Tài xế chạy chuyến & phát GPS

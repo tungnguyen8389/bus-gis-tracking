@@ -40,7 +40,7 @@ simulator/ (tài xế ảo)       ┘  trip:start · gps_ping · trip:end       
 |---|---|
 | Khởi tạo Socket server | [backend/server.js](../backend/server.js) |
 | Đăng ký namespace | [backend/src/sockets/index.js](../backend/src/sockets/index.js) |
-| Viewer "/" (chỉ phát xuống) | [backend/src/sockets/viewer.socket.js](../backend/src/sockets/viewer.socket.js) |
+| Viewer "/" (room trip/vehicle/staff/route) | [backend/src/sockets/viewer.socket.js](../backend/src/sockets/viewer.socket.js) |
 | Thiết bị "/device" | [device.auth.js](../backend/src/sockets/device.auth.js), [device.socket.js](../backend/src/sockets/device.socket.js), [gps.validate.js](../backend/src/sockets/gps.validate.js), [tracking-log.js](../backend/src/sockets/tracking-log.js) |
 | Simulator GPS (công cụ demo, độc lập) | [simulator/](../simulator/) |
 | Client viewer | [frontend/src/modules/realtime/realtime.service.js](../frontend/src/modules/realtime/realtime.service.js) |
@@ -85,7 +85,7 @@ Số liệu DB thật lúc rà soát: `vehicles` = 0, `schedules` = 0, `route_pa
 - **Vấn đề:** Client nào kết nối cũng emit được `gps_ping`, nên có thể giả mạo vị trí bất kỳ xe nào. Gói giả được phát cho mọi người xem và ghi vào DB. Viewer và thiết bị GPS dùng chung một kênh. CORS đang là `origin: "*"`.
 - **Hướng sửa:**
   - [x] Tách namespace `/device` cho thiết bị/simulator, có `io.use()` kiểm token trong `socket.handshake.auth`.
-  - [x] Namespace viewer (`/` hoặc `/viewer`) chỉ nhận, không xử lý `gps_ping`.
+  - [x] Namespace viewer (`/` hoặc `/viewer`) không xử lý `gps_ping` (chỉ nhận sự kiện đăng ký theo dõi).
   - [x] ~~Thêm biến môi trường cho token thiết bị (ví dụ `DEVICE_TOKEN`)~~ Thay bằng JWT của tài khoản tài xế (role `DRIVER`); simulator đăng nhập như tài xế.
   - [x] Bỏ `cors: "*"`, vì Express đã phục vụ frontend cùng origin trên cổng 3000.
   - [x] ⚠️ Cập nhật [test_suite.js:329-370](../backend/test_suite.js#L329-L370), vì test đang dựa vào việc emit `gps_ping` không cần auth.
@@ -110,11 +110,11 @@ Số liệu DB thật lúc rà soát: `vehicles` = 0, `schedules` = 0, `route_pa
 
 ### #4 🟠 Broadcast toàn bộ xe tới mọi client — `DONE`
 
-- **Vị trí:** [viewer.socket.js](../backend/src/sockets/viewer.socket.js), [broadcaster.js](../backend/src/sockets/broadcaster.js) (phát theo room), [trip-registry.js](../backend/src/sockets/trip-registry.js), [simulator/src/virtual-driver.js](../simulator/src/virtual-driver.js)
+- **Vị trí:** [viewer.socket.js](../backend/src/sockets/viewer.socket.js) (`createViewerBroadcaster` phát theo room), [trip-registry.js](../backend/src/sockets/trip-registry.js), [simulator/src/virtual-driver.js](../simulator/src/virtual-driver.js)
 - **Vấn đề:** 332 lộ trình × 2–3 xe tự sinh × 2 Hz ≈ 1.3k–2k emit/giây tới mỗi client, kèm số INSERT tương đương. Client nhận hết rồi mới lọc. Đây là lý do simulator cũ bị tắt; simulator mới (`simulator/`) chỉ chạy số tài xế seed (mặc định 5).
 - **Đã sửa:** device phát vào room `trip:<schedule_id>`, `vehicle:<vehicle_id>`, `staff` thay vì mọi viewer. Khách chỉ nhận chuyến đã `trip:watch` (1 chuyến/socket); danh sách chuyến của tuyến đi qua `trips:subscribe` và không chứa tọa độ.
 - **Còn lại (chưa làm):** `gps_batch` cho simulator, `io.volatile`, snapshot cho nhân viên ở chế độ "ALL".
-- **Kiểm chứng:** Chọn một tuyến thì DevTools → WS chỉ thấy gói của tuyến và chiều đó; khách chọn chuyến thì chỉ thấy xe đó.
+- **Kiểm chứng:** Khách chọn tuyến → DevTools → WS chỉ thấy `trips:update` (không tọa độ); chọn chuyến → chỉ thấy `fleet_location_update` của đúng xe đó.
 
 ### #7 🟡 Không lưu vị trí cuối trên server — `TODO`
 

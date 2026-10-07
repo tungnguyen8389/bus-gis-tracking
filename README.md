@@ -85,7 +85,7 @@ npm start
 
 ### 3. Tài khoản tài xế & nguồn GPS
 
-GPS chỉ được phát bởi **tài xế đã đăng nhập** (namespace Socket.io `/device`, JWT role `DRIVER`). Bản đồ chỉ nhận dữ liệu.
+GPS chỉ được phát bởi **tài xế đã đăng nhập** (namespace Socket.io `/device`, JWT role `DRIVER`). Bản đồ không phát được GPS; khách chỉ nhận vị trí của chuyến đã chọn.
 
 ```bash
 cd backend && npm run db:seed-drivers -- --count 20   # driver01..driver20 / mật khẩu driver123, xe DRV_01..DRV_20, 4 tài xế/tuyến → 5 tuyến
