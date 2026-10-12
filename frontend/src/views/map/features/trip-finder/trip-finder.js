@@ -9,7 +9,7 @@ import { applyFleetFilter } from "../fleet-tracking.js";
 import { getUserPosition } from "../geolocation.js";
 import { buildStopIndex, getStopIndex, normalizeText, findStopsByAddress, searchStopsByName } from "./stop-search.js";
 import { clipPathBetween } from "./path-clip.js";
-import { listStops } from "../../../../modules/stops/stops.service.js";
+import { listStops, listRouteStops } from "../../../../modules/stops/stops.service.js";
 import { planTrip } from "../../../../modules/trip-plan/trip-plan.service.js";
 import { getRoutePath, flattenPathCoords } from "../../../../modules/paths/paths.service.js";
 import { subscribeTrips, watchTrip, clearTripWatch, onTripWatchChange, getWatchedTrip } from "./trip-watch.js";
@@ -149,26 +149,42 @@ function renderTripSchedules({ trips, watchedScheduleId, error }) {
     return;
   }
   if (trips.length === 0) {
-    list.innerHTML = `<li class="trip-empty">Hiện không có chuyến nào trong 2 giờ tới</li>`;
+    list.innerHTML = `<li class="trip-empty"><i class="fa-solid fa-clock-rotate-left"></i> Hiện không có chuyến nào trong 2 giờ tới</li>`;
     return;
   }
+
+  // Tự động theo dõi chuyến phù hợp nhất nếu chưa có chuyến nào được chọn
+  if (watchedScheduleId === null && trips.length > 0) {
+    const autoTrip = trips.find(t => t.status === "RUNNING") || trips.find(t => t.status === "UPCOMING") || trips[0];
+    if (autoTrip) {
+      watchTrip(autoTrip.schedule_id);
+      return;
+    }
+  }
+
   list.innerHTML = "";
   trips.forEach(t => {
     const li = document.createElement("li");
     const passed = t.status === "PASSED";
-    li.className = `trip-schedule${passed ? " passed" : ""}${t.schedule_id === watchedScheduleId ? " active" : ""}`;
+    const isWatched = t.schedule_id === watchedScheduleId;
+    li.className = `trip-schedule${passed ? " passed" : ""}${isWatched ? " active" : ""}`;
+
+    const etaDisplay = t.eta_board
+      ? etaText(t)
+      : (passed ? "Xe đang trên tuyến" : "");
+
     li.innerHTML = `
       <div class="trip-schedule-main"><b>${escapeHtml(t.departure_time)}</b> · ${escapeHtml(t.plate_number)} · ${escapeHtml(t.driver_name || "")}</div>
       <div class="trip-schedule-meta">
         <span class="trip-status ${t.status.toLowerCase()}">${STATUS_LABEL[t.status]}</span>
-        <span class="trip-eta">${escapeHtml(etaText(t))}</span>
+        <span class="trip-eta">${escapeHtml(etaDisplay)}</span>
       </div>`;
-    if (!passed) {
-      li.onclick = e => {
-        e.stopPropagation();
-        watchTrip(t.schedule_id);
-      };
-    }
+
+    // Cho phép click vào MỌI chuyến (kể cả xe đã qua trạm) để theo dõi và xem vị trí xe trên bản đồ
+    li.onclick = e => {
+      e.stopPropagation();
+      watchTrip(t.schedule_id);
+    };
     list.appendChild(li);
   });
 }
@@ -190,7 +206,7 @@ function renderGuestDashboard({ watchedScheduleId, ended }) {
   }
   let eta = "--";
   if (ended) eta = "Chuyến đã kết thúc";
-  else if (trip && trip.status === "PASSED") eta = "Xe đã qua trạm của bạn";
+  else if (trip && trip.status === "PASSED") eta = "Xe đã qua trạm đón của bạn (đang chạy)";
   else if (trip && trip.status === "UPCOMING") eta = `Chưa xuất bến — dự kiến ${trip.departure_time}${trip.eta_board ? ` · tới trạm ${etaText(trip)}` : ""}`;
   else if (trip && trip.eta_board) eta = etaText(trip);
   document.getElementById("busEta").innerText = eta;
@@ -234,7 +250,11 @@ function renderTripResults(data, position) {
   const focus = [[dest.longitude, dest.latitude]];
   if (position) {
     addTripMarker(position.longitude, position.latitude, [37, 99, 235], "Vị trí của bạn");
-    focus.push([position.longitude, position.latitude]);
+    // Chỉ gom vị trí người dùng vào khung nhìn nếu ở gần điểm đến (< 2.5km), tránh bị kéo zoom lệch hàng chục km
+    const distM = Math.hypot(position.longitude - dest.longitude, position.latitude - dest.latitude) * 111000;
+    if (distM < 2500) {
+      focus.push([position.longitude, position.latitude]);
+    }
   }
   goToSequential(focus.length > 1 ? focus : { center: focus[0], zoom: 16 }, { duration: 700 });
 
@@ -273,7 +293,7 @@ function renderTripResults(data, position) {
   });
 }
 
-// Chỉ vẽ đoạn lộ trình khách thực sự đi (trạm lên → trạm xuống) + 2 trạm đó, chỉ hiện xe của tuyến
+// Vẽ toàn bộ tuyến tim đường (màu nhạt) + đoạn lộ trình khách đi (màu đậm) + toàn bộ trạm của tuyến
 async function showTripOnMap(result, dest, position) {
   state.currentSelectedRoute = result.route_id;
   state.currentDirection = Number(result.direction);
@@ -285,27 +305,83 @@ async function showTripOnMap(result, dest, position) {
   const alight = [result.alight_stop.longitude, result.alight_stop.latitude];
   const focus = [alight];
   if (board) focus.push(board);
+
+  // 1. Tải và vẽ lộ trình tim đường (cả toàn tuyến và phân đoạn khách đi)
+  let routeCoordsForZoom = null;
   try {
     const path = await getRoutePath(result.route_id, state.currentDirection);
-    const segment = clipPathBetween(flattenPathCoords(path.geometry), board, alight);
     // Người dùng có thể đã chọn tuyến khác trong lúc chờ tải
     if (state.currentSelectedRoute !== result.route_id) return;
-    if (segment.length > 1 && map.routeLayer) {
-      map.routeLayer.add(new map.Graphic({
-        geometry: { type: "polyline", paths: [segment] },
-        symbol: { type: "simple-line", color: [0, 122, 255, 0.9], width: 5 }
-      }));
-      focus.push(...segment);
+
+    const fullCoords = flattenPathCoords(path.geometry);
+    const segment = clipPathBetween(fullCoords, board, alight);
+
+    if (map.routeLayer) {
+      // 1.1. Vẽ toàn bộ lộ trình tim đường của tuyến (xanh nhạt để định hướng toàn tuyến)
+      if (fullCoords.length > 1) {
+        map.routeLayer.add(new map.Graphic({
+          geometry: { type: "polyline", paths: fullCoords },
+          symbol: { type: "simple-line", color: [0, 122, 255, 0.4], width: 4 }
+        }));
+      }
+      // 1.2. Vẽ đoạn phân đoạn thực tế khách sẽ đi (xanh dương đậm nổi bật)
+      if (segment.length > 1) {
+        map.routeLayer.add(new map.Graphic({
+          geometry: { type: "polyline", paths: [segment] },
+          symbol: { type: "simple-line", color: [0, 122, 255, 0.95], width: 6 }
+        }));
+      }
     }
-  } catch (e) {}
-  if (position) focus.push([position.longitude, position.latitude]);
-  goToSequential(focus, { duration: 800 });
+    // Ưu tiên zoom bao quát toàn tuyến để căn giữa và nhìn thấy đầy đủ hướng tuyến
+    if (fullCoords && fullCoords.length > 1) {
+      routeCoordsForZoom = fullCoords;
+    } else if (segment && segment.length > 1) {
+      routeCoordsForZoom = segment;
+    }
+  } catch (e) {
+    console.warn("Lỗi tải tim đường tuyến:", e);
+  }
+
+  // 2. Tải và vẽ toàn bộ trạm dừng của tuyến theo chiều
+  try {
+    const stops = await listRouteStops(result.route_id, state.currentDirection);
+    if (state.currentSelectedRoute === result.route_id) {
+      state.currentRawStops = stops || [];
+      if (map.stopsLayer && map.Graphic) {
+        map.stopsLayer.removeAll();
+        state.currentRawStops.forEach((st, idx) => {
+          const order = st.stop_order || (idx + 1);
+          const stopGraphic = new map.Graphic({
+            geometry: { type: "point", longitude: st.longitude, latitude: st.latitude },
+            symbol: {
+              type: "simple-marker",
+              color: [0, 150, 136, 0.85],
+              size: "9px",
+              outline: { color: [255, 255, 255], width: 1.5 }
+            },
+            attributes: st,
+            popupTemplate: {
+              title: `Trạm #${order}: {stop_name}`,
+              content: `<b>Mã trạm:</b> {stop_id}<br><b>Địa chỉ:</b> {address}<br><b>Tọa độ:</b> [{longitude}, {latitude}]`
+            }
+          });
+          map.stopsLayer.add(stopGraphic);
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("Lỗi tải danh sách trạm của tuyến:", e);
+  }
+
+  // 3. Zoom căn giữa và phóng lớn bao quát tuyến xe buýt
+  const zoomTarget = (routeCoordsForZoom && routeCoordsForZoom.length > 1) ? routeCoordsForZoom : focus;
+  goToSequential(zoomTarget, { duration: 800 });
 
   clearTripLayer();
   addTripMarker(dest.longitude, dest.latitude, [220, 38, 38], `Điểm đến: ${dest.stop_name}`, escapeHtml(dest.address || ""));
   if (position) addTripMarker(position.longitude, position.latitude, [37, 99, 235], "Vị trí của bạn");
   if (result.board_stop) {
-    addTripMarker(result.board_stop.longitude, result.board_stop.latitude, [22, 163, 74], `Lên xe: ${result.board_stop.stop_name}`, `Tuyến ${escapeHtml(result.route_number)}`);
+    addTripMarker(result.board_stop.longitude, result.board_stop.latitude, [22, 163, 74], `Lên xe: ${result.board_stop.stop_name}`, `Tuyến ${escapeHtml(result.route_number)} (Trạm đón)`);
   }
-  addTripMarker(result.alight_stop.longitude, result.alight_stop.latitude, [234, 88, 12], `Xuống xe: ${result.alight_stop.stop_name}`, `Tuyến ${escapeHtml(result.route_number)}`);
+  addTripMarker(result.alight_stop.longitude, result.alight_stop.latitude, [234, 88, 12], `Xuống xe: ${result.alight_stop.stop_name}`, `Tuyến ${escapeHtml(result.route_number)} (Trạm xuống)`);
 }

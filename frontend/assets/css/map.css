@@ -294,8 +294,9 @@ html, body, #viewDiv {
 }
 .trip-schedule:hover { border-color: #0079c1; }
 .trip-schedule.active { border-color: #0079c1; background: #eff6ff; }
-.trip-schedule.passed { opacity: 0.5; cursor: not-allowed; }
-.trip-schedule.passed:hover { border-color: #e2e8f0; }
+.trip-schedule.passed { opacity: 0.85; cursor: pointer; background: #f8fafc; }
+.trip-schedule.passed:hover { border-color: #0079c1; }
+.trip-schedule.passed.active { border-color: #0079c1; background: #eff6ff; opacity: 1; }
 .trip-schedule-main { color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trip-schedule-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; font-size: 11px; }
 .trip-status { font-weight: 700; border-radius: 4px; padding: 0 6px; }
