@@ -9,6 +9,7 @@ const { migrateDriverSchema } = require("./migrations");
 // --------------------------------------------------------------------
 const dbPool = mysql.createPool({
   host: DB.host,
+  port: DB.port,
   user: DB.user,
   password: DB.password,
   database: DB.database,
@@ -21,6 +22,7 @@ async function initDatabase() {
   try {
     const rootConn = await mysql.createConnection({
       host: DB.host,
+      port: DB.port,
       user: DB.user,
       password: DB.password,
       multipleStatements: true

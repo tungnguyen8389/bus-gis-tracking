@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  bus-mysql:
+    image: mysql:8.0
+    container_name: bus_gis_mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max-allowed-packet=64M
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: bus_secure_root_2026
+      MYSQL_DATABASE: bus_management_db
+    # KHÔNG public cổng 3306 ra ngoài VPS để tránh đụng độ MySQL của aaPanel
+    # Hai container tự nói chuyện với nhau qua mạng riêng bus-net
+    volumes:
+      - bus_mysql_data:/var/lib/mysql
+    networks:
+      - bus-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pbus_secure_root_2026"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  bus-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bus_gis_backend
+    restart: unless-stopped
+    depends_on:
+      bus-mysql:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      DB_HOST: bus-mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: bus_secure_root_2026
+      DB_NAME: bus_management_db
+      JWT_SECRET: bus_gis_jwt_secret_token_2026_secure
+    # Ánh xạ ra cổng 3005 trên VPS (hoặc cổng bất kỳ bạn chọn) để không ảnh hưởng app khác
+    ports:
+      - "3005:3000"
+    networks:
+      - bus-net
+
+volumes:
+  bus_mysql_data:
+    name: bus_gis_mysql_data
+
+networks:
+  bus-net:
+    name: bus_gis_network
+    driver: bridge
