@@ -10,12 +10,18 @@ const { VirtualDriver } = require("./virtual-driver");
 function parseUsernames(argv) {
   const get = flag => {
     const i = argv.indexOf(flag);
-    return i >= 0 ? argv[i + 1] : undefined;
+    if (i >= 0) return argv[i + 1];
+    const prefix = flag + "=";
+    const eq = argv.find(a => typeof a === "string" && a.startsWith(prefix));
+    if (eq) return eq.slice(prefix.length);
+    return undefined;
   };
   const list = get("--drivers");
   if (list) return list.split(",").map(s => s.trim()).filter(Boolean);
 
-  const count = Number(get("--count") ?? 5);
+  // Nhận --count 20, --count=20 hoặc số tự do (do PowerShell/npm có thể chuyển cờ thành '20')
+  const countArg = get("--count") ?? argv.find(a => /^\d+$/.test(a));
+  const count = Number(countArg ?? 5);
   if (!Number.isInteger(count) || count < 1 || count > 99) throw new Error("--count phải là số nguyên 1..99");
   return Array.from({ length: count }, (_, i) => `driver${String(i + 1).padStart(2, "0")}`);
 }
