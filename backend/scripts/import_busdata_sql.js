@@ -71,6 +71,58 @@ async function ensureSchema(conn) {
   }
 }
 
+// Tách file SQL thành từng câu lệnh riêng để tránh vượt max_allowed_packet (1MB) của MySQL
+function splitSqlStatements(sql) {
+  const statements = [];
+  let start = 0;
+  let inString = false;
+  let quote = null;
+  const len = sql.length;
+
+  for (let i = 0; i < len; i++) {
+    const ch = sql[i];
+
+    if (!inString && ch === "-" && sql[i + 1] === "-") {
+      const nextLine = sql.indexOf("\n", i + 2);
+      if (nextLine === -1) break;
+      i = nextLine;
+      continue;
+    }
+
+    if (inString) {
+      if (ch === "\\") {
+        i++;
+      } else if (ch === quote) {
+        if (sql[i + 1] === quote) {
+          i++;
+        } else {
+          inString = false;
+          quote = null;
+        }
+      }
+    } else {
+      if (ch === "'" || ch === '"' || ch === "`") {
+        inString = true;
+        quote = ch;
+      } else if (ch === ";") {
+        const stmt = sql.slice(start, i).trim();
+        const cleaned = stmt.replace(/^(--[^\r\n]*\r?\n\s*)+/g, "").trim();
+        if (cleaned.length > 0) {
+          statements.push(cleaned);
+        }
+        start = i + 1;
+      }
+    }
+  }
+
+  const remaining = sql.slice(start).trim().replace(/^(--[^\r\n]*\r?\n\s*)+/g, "").trim();
+  if (remaining.length > 0) {
+    statements.push(remaining);
+  }
+
+  return statements;
+}
+
 async function main() {
   const sql = fs.readFileSync(BUSDATA_SQL_FILE, "utf8");
   const expected = expectedCounts(sql);
@@ -79,7 +131,10 @@ async function main() {
   let ok = true;
   try {
     await ensureSchema(conn);
-    await conn.query(sql);
+    const statements = splitSqlStatements(sql);
+    for (const stmt of statements) {
+      await conn.query(stmt);
+    }
 
     // busdata.sql nạp với FOREIGN_KEY_CHECKS = 0 → lịch trình của tuyến đã bị thay (vd. demo BUS_01) thành mồ côi
     const [orphans] = await conn.query("DELETE FROM schedules WHERE route_id NOT IN (SELECT route_id FROM bus_routes)");
@@ -91,6 +146,9 @@ async function main() {
       ok = ok && match;
       console.log(`    ${match ? "✔" : "✘"} ${table}: ${row.n}${expected[table] !== undefined ? ` / ${expected[table]}` : ""}`);
     }
+  } catch (err) {
+    await conn.query("ROLLBACK").catch(() => {});
+    throw err;
   } finally {
     await conn.end();
   }
