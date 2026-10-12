@@ -1,14 +1,14 @@
 # ĐẶC TẢ THIẾT KẾ CƠ SỞ DỮ LIỆU KHÔNG GIAN (SPATIAL DATABASE SPECIFICATION)
 ## HỆ THỐNG QUẢN LÝ VÀ GIÁM SÁT HÀNH TRÌNH XE BUÝT 2D (WEB GIS)
 
-> **Tài liệu phục vụ Báo cáo Đồ án Hệ thống Thông tin Địa lý (GIS / Web GIS):** Đặc tả chi tiết cấu trúc CSDL không gian, mô hình thực thể quan hệ (ERD), mô tả chi tiết các mối quan hệ nghiệp vụ, từ điển dữ liệu (Data Dictionary), quy ước hệ quy chiếu trắc địa, cơ chế chỉ mục không gian (Spatial Index) và các hàm không gian OGC.
+> **Tài liệu phục vụ Báo cáo Đồ án Hệ thống Thông tin Địa lý (GIS / Web GIS):** Đặc tả chi tiết cấu trúc CSDL không gian, mô hình thực thể quan hệ (ERD), mô tả chi tiết các mối quan hệ nghiệp vụ, từ điển dữ liệu (Data Dictionary), quy ước hệ quy chiếu trắc địa, cơ chế chỉ mục không gian (Spatial Index) và các hàm không gian OGC. Đối chiếu lại với mã nguồn ngày 12/10/2026. Luồng dữ liệu giữa các thành phần: xem [DATA_FLOW.md](DATA_FLOW.md).
 
 ---
 
 ## 1. TỔNG QUAN HỆ THỐNG CƠ SỞ DỮ LIỆU KHÔNG GIAN
 
 * **Hệ quản trị CSDL:** **MariaDB 10.4.34** (chạy trong Docker container `bus-gis-mariadb`), Storage Engine `InnoDB` hỗ trợ giao dịch ACID và Spatial Index. Script DDL viết theo cú pháp chung MySQL/MariaDB Spatial.
-* **Tên CSDL:** `bus_management_db`
+* **Tên CSDL:** `bus_management_db` (mặc định; đổi bằng biến môi trường `DB_NAME`, cùng `DB_HOST`, `DB_USER`, `DB_PASSWORD` trong `backend/.env`). Lưu ý: `schema.sql` ghi cứng `CREATE DATABASE … bus_management_db; USE bus_management_db;` — `npm run db:import` bỏ hai lệnh này nên chạy đúng với tên tùy chỉnh, còn tự khởi tạo lúc server khởi động thì chạy nguyên tệp, nên chỉ đúng với tên mặc định. Backend kết nối qua pool `mysql2` (tối đa 10 kết nối).
 * **Bộ mã ký tự (Charset / Collation):** `utf8mb4` / `utf8mb4_unicode_ci` (hỗ trợ tiếng Việt có dấu và ký tự đa ngôn ngữ).
 * **Hệ quy chiếu tọa độ không gian (CRS - Coordinate Reference System):** 
   * **WGS84 (World Geodetic System 1984)** - Mã định danh chuẩn: **EPSG:4326** / **SRID 4326**. Toàn bộ 5.898 trạm và 332 lộ trình hiện có đều mang `ST_SRID(geom) = 4326`.
@@ -25,12 +25,13 @@ Dữ liệu được tách thành hai tệp trong thư mục `database/`:
 
 | Tệp | Nội dung | Cách nạp |
 |---|---|---|
-| `schema.sql` | DDL 8 bảng + dữ liệu mẫu: 2 tài khoản (`admin` / `manager`) và 4 xe buýt demo (`BUS_51B_01` … `BUS_51B_04`) | Chạy trực tiếp bằng MySQL/MariaDB client |
+| `schema.sql` | DDL 8 bảng + dữ liệu mẫu: 2 tài khoản (`admin` / `manager`) và 4 xe buýt demo (`BUS_51B_01` … `BUS_51B_04`, chưa gán tài khoản tài xế) | Server tự nạp khi CSDL chưa có bảng `users`; hoặc chạy trực tiếp bằng MySQL/MariaDB client |
 | `busdata.sql` | Dữ liệu mạng lưới xe buýt **TP.HCM** thực tế cho 4 bảng tĩnh: `bus_routes`, `bus_stops`, `route_paths`, `route_stops`. Tệp sinh tự động, **không sửa tay** | `cd backend && npm run db:import` (xuất lại: `npm run db:export`) |
+| `backend/scripts/seed_drivers.js` | Tài khoản tài xế demo `driver01…driverNN` (role `DRIVER`), xe `DRV_01…DRV_NN` đã gán tài xế, 17 chuyến/ngày mỗi xe | `cd backend && npm run db:seed-drivers -- --count N` (mặc định 20) |
 
 Script `db:import` xóa dữ liệu cũ của 4 bảng tĩnh rồi nạp lại trong **một giao dịch** (`START TRANSACTION`, tạm tắt `FOREIGN_KEY_CHECKS`), đảm bảo CSDL không rơi vào trạng thái nạp dở.
 
-**Thống kê số bản ghi (đếm `COUNT(*)` trên CSDL ngày 04/10/2026):**
+**Thống kê bảng tĩnh** (đếm `COUNT(*)` trên CSDL ngày 04/10/2026; khớp dòng tiêu đề của `busdata.sql`, tệp không đổi từ 03/10/2026):
 
 | Bảng | Số bản ghi | Ghi chú |
 |---|---:|---|
@@ -38,10 +39,25 @@ Script `db:import` xóa dữ liệu cũ của 4 bảng tĩnh rồi nạp lại t
 | `bus_stops` | 5.898 | `stop_id` từ `1` đến `10068`; 5.715 trạm *Đang khai thác* |
 | `route_paths` | 332 | 178 lộ trình chiều đi + 154 lộ trình chiều về; trung bình 286 đỉnh/lộ trình (min 13, max 1.027) |
 | `route_stops` | 13.772 | 7.128 lượt ghé chiều đi + 6.644 lượt ghé chiều về; trung bình ~41,5 trạm/chiều, tối đa 138 trạm |
-| `users` | 2 | 1 `ADMIN`, 1 `MANAGER` |
-| `vehicles` | 0 | Bảng nghiệp vụ vận hành, nhập qua Cổng Quản trị hoặc seed `schema.sql` |
-| `schedules` | 0 | Bảng nghiệp vụ vận hành, nhập qua Cổng Quản trị |
-| `vehicle_tracking_logs` | 0 | Sinh động khi xe phát tín hiệu GPS qua Socket.IO |
+
+**Bảng vận hành** — số bản ghi phụ thuộc môi trường; các con số dưới đây **suy ra từ code** (`schema.sql` + `seed_drivers.js` với `--count 20` mặc định), không phải đo trên CSDL:
+
+| Bảng | Sau `schema.sql` | Sau thêm `db:seed-drivers` (20) | Nguồn ghi khác |
+|---|---:|---:|---|
+| `users` | 2 (1 `ADMIN`, 1 `MANAGER`) | 22 (+20 `DRIVER`) | Cổng Quản trị (UC-18) |
+| `vehicles` | 4 | 24 (+20 `DRV_NN`, đã gán tài xế) | Cổng Quản trị (UC-14), nhập JSON |
+| `schedules` | 0 | 340 (20 xe × 17 chuyến) | Cổng Quản trị (UC-15) |
+| `vehicle_tracking_logs` | 0 | 0 | Tăng khi xe chạy chuyến: tối đa 1 bản ghi / xe / 5 giây (≈ 720 bản ghi / xe / giờ) |
+
+### 1.2. Khởi tạo và di trú cấu trúc CSDL (migration)
+
+Không có công cụ migration riêng; cấu trúc được đảm bảo ở ba chỗ, đều chạy lặp lại an toàn (idempotent):
+
+| Thời điểm | Mã nguồn | Việc làm |
+|---|---|---|
+| Mỗi lần khởi động server | `initDatabase` trong [db.js](../backend/src/config/db.js) | Tạo CSDL nếu chưa có; nếu chưa có bảng `users` thì nạp `schema.sql` (**không** nạp `busdata.sql` — CSDL mới chưa có tuyến cho tới khi chạy `db:import`); sau đó chạy `migrateDriverSchema`. Lỗi chỉ ghi cảnh báo, server vẫn chạy. |
+| Khởi động server và trước khi seed tài xế | `migrateDriverSchema` trong [migrations.js](../backend/src/config/migrations.js) | CSDL tạo từ schema cũ: thêm `'DRIVER'` vào ENUM `users.role`; thêm cột `vehicles.driver_user_id INT NULL UNIQUE` + khóa ngoại `fk_vehicles_driver` (`ON DELETE SET NULL`). Lệnh DDL, chạy ngoài giao dịch. |
+| `npm run db:import` | `ensureSchema` trong [import_busdata_sql.js](../backend/scripts/import_busdata_sql.js) | CSDL trống → nạp `schema.sql`; CSDL cũ → bổ sung các cột mới của `bus_routes`/`bus_stops`, đổi khóa chính `route_stops` sang `(route_id, direction, stop_order)`. Sau khi nạp `busdata.sql` (tắt `FOREIGN_KEY_CHECKS`), xóa các `schedules` trỏ tới tuyến không còn tồn tại. |
 
 ---
 
@@ -105,8 +121,9 @@ flowchart TD
         <b>string</b> &nbsp; <b>vehicle_id (PK)</b> : Mã định danh xe<br/>
         <b>string</b> &nbsp; <b>plate_number (UK)</b> : Biển số kiểm soát<br/>
         <b>int</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; capacity : Sức chứa hành khách (chỗ)<br/>
-        <b>string</b> &nbsp; driver_name : Họ tên tài xế phụ trách<br/>
-        <b>string</b> &nbsp; status : ACTIVE | MAINTENANCE | INACTIVE"]:::tblBody
+        <b>string</b> &nbsp; driver_name : Tên tài xế hiển thị<br/>
+        <b>string</b> &nbsp; status : ACTIVE | MAINTENANCE | INACTIVE<br/>
+        <b>int</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>driver_user_id (FK, UK)</b> : Tài khoản tài xế"]:::tblBody
 
         T_SCHEDULES["<b>schedules</b> (Lịch trình Phân công chuyến)<hr/>
         <b>int</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>schedule_id (PK)</b> : Mã phân công tự tăng<br/>
@@ -133,9 +150,9 @@ flowchart TD
         <b>int</b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>user_id (PK)</b> : Mã tài khoản tự tăng<br/>
         <b>string</b> &nbsp; <b>username (UK)</b> : Tên đăng nhập duy nhất<br/>
         <b>string</b> &nbsp; password_hash : Mật khẩu mã hóa Bcrypt<br/>
-        <b>string</b> &nbsp; full_name : Họ và tên cán bộ điều hành<br/>
+        <b>string</b> &nbsp; full_name : Họ và tên người dùng<br/>
         <b>string</b> &nbsp; email : Email liên hệ<br/>
-        <b>enum</b> &nbsp;&nbsp;&nbsp; role : ADMIN | MANAGER | VIEWER<br/>
+        <b>enum</b> &nbsp;&nbsp;&nbsp; role : ADMIN | MANAGER | VIEWER | DRIVER<br/>
         <b>timest</b> created_at : Thời điểm tạo tài khoản"]:::tblBody
     end
 
@@ -149,6 +166,7 @@ flowchart TD
     T_ROUTES -->|1 : N| T_SCHEDULES
     T_VEHICLES -->|1 : N| T_SCHEDULES
     T_VEHICLES -->|1 : N| T_LOGS
+    T_USERS -->|"1 : 0..1"| T_VEHICLES
 
     %% Ẩn khung bao để tạo 4 dòng bảng tự nhiên
     style ROW1 fill:none,stroke:none;
@@ -161,7 +179,7 @@ flowchart TD
 
 ## 2.1. MÔ TẢ CHI TIẾT CÁC MỐI QUAN HỆ TRONG SƠ ĐỒ THỰC THỂ QUAN HỆ
 
-Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn hóa theo dạng chuẩn 3 (3NF) kết hợp mở rộng các kiểu dữ liệu không gian OGC. Mối liên kết giữa các thực thể thuộc tính và thực thể không gian được phân chia thành **5 nhóm quan hệ nghiệp vụ cốt lõi** như sau:
+Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn hóa theo dạng chuẩn 3 (3NF) kết hợp mở rộng các kiểu dữ liệu không gian OGC. Mối liên kết giữa các thực thể thuộc tính và thực thể không gian được phân chia thành **5 nhóm quan hệ nghiệp vụ cốt lõi** như sau (cách dữ liệu chảy qua các bảng khi hệ thống chạy được mô tả ở [DATA_FLOW.md](DATA_FLOW.md)):
 
 ### 1. Quan hệ giữa Tuyến xe buýt và Lộ trình Tim đường (`bus_routes` – `route_paths`): Quan hệ $1 - N$
 * **Bản chất nghiệp vụ:** Phần lớn tuyến xe buýt (`bus_routes`) có hai hướng di chuyển độc lập: *Lượt đi (Outbound - Direction 1)* và *Lượt về (Inbound - Direction 2)* với quỹ đạo tim đường số hóa khác nhau do cấu trúc đường một chiều hoặc luồng phân làn giao thông đô thị. Theo dữ liệu thực tế: **154/178 tuyến** có đủ hai chiều, **24 tuyến** chỉ có chiều đi (tuyến vòng khép kín, ví dụ `DL01` *Bến xe buýt Sài Gòn - Thủ Thiêm*, các tuyến gom khách ga Metro số 1). Mọi tuyến đều có ít nhất một lộ trình.
@@ -186,16 +204,25 @@ Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn
 * **Cơ chế liên kết khóa:** Bảng `schedules` chứa hai khóa ngoại:
   * `route_id` tham chiếu đến `bus_routes(route_id)`.
   * `vehicle_id` tham chiếu đến `vehicles(vehicle_id)`.
-* **Ý nghĩa:** Cho phép hệ thống truy vấn và hiển thị tức thời biểu đồ phân công xe chạy theo giờ xuất bến (`departure_time`) và chiều chạy (`direction`), hỗ trợ quản lý biểu đồ giờ và phát hiện xung đột lịch trình.
+* **Ý nghĩa:** Mỗi bản ghi là **một chuyến** (xe X chạy tuyến Y chiều Z, xuất bến lúc HH:MM). `departure_time` kiểu `TIME`, không có ngày → lịch lặp lại mỗi ngày. Bảng được dùng ở bốn nơi:
+  * Cổng Quản trị: lập và xem biểu đồ phân công.
+  * Trang tài xế / simulator: `GET /driver/me` liệt kê các chuyến của xe; `trip:start { schedule_id }` chỉ được chấp nhận khi chuyến thuộc xe của tài xế.
+  * Bản đồ công khai: danh sách chuyến cho khách chỉ gồm chuyến đang chạy hoặc có giờ xuất bến (giờ VN) trong khoảng 15 phút trước – 2 giờ sau; ETA của chuyến chưa chạy tính từ `departure_time`.
+  * `schedule_id` là khóa của chuyến đang chạy trong bộ nhớ server (registry) và của room Socket.IO `trip:<schedule_id>`.
+* **Giới hạn:** CSDL và ứng dụng **không** kiểm tra xung đột (một xe có thể có hai chuyến cùng giờ); không có ràng buộc `UNIQUE` trên `(vehicle_id, departure_time)`.
 
 ### 4. Quan hệ Giám sát Hành trình Vết xe thời gian thực (`vehicles` – `vehicle_tracking_logs`): Quan hệ $1 - N$ (Chuỗi thời gian Spatio-Temporal)
-* **Bản chất nghiệp vụ:** Trong suốt quá trình xe buýt lăn bánh, thiết bị định vị GPS/bộ giả lập viễn thông sẽ định kỳ phát tín hiệu tọa độ về máy chủ mỗi $1 - 2\text{ giây}$. Do đó, một phương tiện xe buýt (`vehicles`) sẽ tích lũy một tập hợp vô số các bản ghi vết di chuyển theo thời gian trong bảng `vehicle_tracking_logs` ($1 \text{ Xe} \rightarrow N \text{ Bản ghi GPS}$).
-* **Cơ chế liên kết khóa:** Trường `vehicle_id` trong bảng nhật ký đóng vai trò là Khóa ngoại liên kết chặt chẽ với bảng `vehicles`. Gói tin GPS (sự kiện Socket.IO `gps_ping`) được phát lại ngay cho bản đồ rồi mới ghi bất đồng bộ vào CSDL; nếu `vehicle_id` chưa tồn tại trong `vehicles`, lệnh `INSERT` bị khóa ngoại từ chối và bỏ qua — vết GPS chỉ được lưu cho xe đã đăng ký.
+* **Bản chất nghiệp vụ:** Trong suốt quá trình xe buýt lăn bánh, thiết bị của tài xế phát tọa độ về máy chủ (điện thoại tối đa 1 gói/giây, simulator 1 gói/0,5 giây). Máy chủ phát mọi gói hợp lệ cho bản đồ nhưng chỉ **ghi tối đa 1 bản ghi / xe / 5 giây** vào `vehicle_tracking_logs`. Một phương tiện (`vehicles`) tích lũy dần chuỗi vết theo thời gian ($1 \text{ Xe} \rightarrow N \text{ Bản ghi GPS}$).
+* **Cơ chế liên kết khóa:** Trường `vehicle_id` trong bảng nhật ký là Khóa ngoại tới `vehicles`. Giá trị này **không** do thiết bị gửi lên mà lấy từ phiên Socket.IO `/device` đã xác thực (JWT tài xế → `vehicles.driver_user_id`), nên luôn là xe có thật. Gói được phát cho bản đồ trước, rồi ghi bất đồng bộ; lỗi ghi chỉ được log (có giới hạn), không chặn realtime.
+* **Dữ liệu được lưu:** `vehicle_id`, `speed_kmh`, `heading`, `geom`. **Không** lưu `schedule_id` (chuyến) và **không** lưu nhãn thời gian của gói: `recorded_at` là thời điểm CSDL chèn bản ghi (`DEFAULT CURRENT_TIMESTAMP`). Muốn tái hiện theo chuyến phải suy ra từ `schedules` + khoảng thời gian.
 * **Tối ưu hóa truy vấn:** Bảng nhật ký vết được đánh chỉ mục kết hợp **`INDEX(vehicle_id, recorded_at)`** và **`SPATIAL INDEX(geom)`**. Cấu trúc này cho phép lọc nhanh lịch sử tọa độ của một xe cụ thể theo khoảng thời gian, làm nền tảng cho chức năng tái hiện vệt hành trình (Playback History) trên bản đồ 2D. *(Hiện tại hệ thống mới ghi vết và thống kê tổng số bản ghi trên Dashboard; giao diện Playback chưa triển khai.)*
 
-### 5. Thực thể Độc lập Quản trị Người dùng và Phân quyền (`users`)
-* **Bản chất nghiệp vụ:** Bảng `users` quản lý danh mục tài khoản cán bộ quản trị và nhân viên điều hành hệ thống theo mô hình phân quyền **RBAC (Role-Based Access Control)**.
-* **Đặc tính liên kết:** Bảng `users` tồn tại độc lập, không thiết lập khóa ngoại trực tiếp tới các bảng dữ liệu không gian nhằm đảm bảo tính toàn vẹn cấu trúc và hiệu năng hệ thống. Mọi tương tác chỉnh sửa dữ liệu bản đồ hay xuất nhập JSON đều được kiểm soát qua tầng trung gian xác thực **JWT (JSON Web Token)** trước khi tác động vào CSDL.
+### 5. Người dùng, Phân quyền và Gán xe cho tài xế (`users` – `vehicles`): Quan hệ $1 - 0..1$
+* **Bản chất nghiệp vụ:** Bảng `users` quản lý tài khoản theo mô hình phân quyền **RBAC (Role-Based Access Control)**: `ADMIN`, `MANAGER` (nhân viên, đăng nhập Cổng Quản trị / bản đồ điều hành) và `DRIVER` (tài xế, đăng nhập trang tài xế để chạy chuyến và phát GPS). `VIEWER` còn trong ENUM nhưng không đăng nhập được.
+* **Cơ chế liên kết khóa:** `vehicles.driver_user_id` là Khóa ngoại tới `users(user_id)`, có ràng buộc `UNIQUE` → mỗi tài xế phụ trách tối đa một xe và mỗi xe có tối đa một tài khoản tài xế. Khi xóa tài khoản, `ON DELETE SET NULL` gỡ liên kết, xe và lịch trình vẫn còn. CSDL không kiểm tra `role = 'DRIVER'` cho cột này; ứng dụng kiểm tra khi đăng nhập và khi bắt tay Socket.IO.
+* **Ý nghĩa:** Liên kết này quyết định danh tính xe của mọi gói GPS: máy chủ tra `vehicles WHERE driver_user_id = <user_id trong JWT>` mỗi lần đăng nhập, gọi `GET /driver/me` và bắt tay `/device`, nên gán lại xe có hiệu lực ngay. Cổng Quản trị chưa có giao diện gán; hiện gán bằng `db:seed-drivers` hoặc SQL.
+* **Phân biệt với `driver_name`:** `vehicles.driver_name` chỉ là tên hiển thị tự do (hiện trong danh sách chuyến của khách), không liên quan tới tài khoản.
+* Các bảng dữ liệu không gian không tham chiếu `users`; mọi thao tác ghi dữ liệu bản đồ hay xuất nhập JSON được kiểm soát ở tầng ứng dụng qua **JWT (JSON Web Token)**.
 
 ### 📊 Bảng tổng hợp Ma trận Quan hệ và Ràng buộc Toàn vẹn (Integrity Matrix)
 
@@ -207,27 +234,31 @@ Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn
 | `bus_routes` | `schedules` | `route_id` | $1 - N$ | `ON DELETE CASCADE`, `ON UPDATE RESTRICT` (mặc định) |
 | `vehicles` | `schedules` | `vehicle_id` | $1 - N$ | `ON DELETE CASCADE`, `ON UPDATE RESTRICT` (mặc định) |
 | `vehicles` | `vehicle_tracking_logs` | `vehicle_id` | $1 - N$ | `ON DELETE CASCADE`, `ON UPDATE RESTRICT` (mặc định) |
+| `users` | `vehicles` | `driver_user_id` (`UNIQUE`, cho phép `NULL`) | $1 - 0..1$ | `ON DELETE SET NULL`, `ON UPDATE RESTRICT` (mặc định) |
 
-> DDL chỉ khai báo `ON DELETE CASCADE`; mệnh đề `ON UPDATE` không khai báo nên InnoDB áp dụng mặc định `RESTRICT` (từ chối đổi khóa chính khi còn bản ghi con).
+> DDL chỉ khai báo `ON DELETE`; mệnh đề `ON UPDATE` không khai báo nên InnoDB áp dụng mặc định `RESTRICT` (từ chối đổi khóa chính khi còn bản ghi con).
+>
+> **Hệ quả xóa dây chuyền cần lưu ý:** xóa một tuyến xóa luôn lộ trình, liên kết trạm và mọi lịch trình của tuyến; xóa một xe xóa luôn lịch trình và **toàn bộ nhật ký GPS** của xe; xóa một trạm gỡ trạm khỏi mọi tuyến.
 
 ---
 
 ## 3. TỪ ĐIỂN DỮ LIỆU CHI TIẾT (DATA DICTIONARY)
 
-### 3.1. Bảng `users` (Người dùng & Phân quyền Quản trị)
-* **Ý nghĩa:** Quản lý tài khoản đăng nhập vào Cổng Quản trị (Admin Portal), phân cấp quyền truy cập hệ thống theo mô hình RBAC (Role-Based Access Control).
+### 3.1. Bảng `users` (Người dùng & Phân quyền)
+* **Ý nghĩa:** Quản lý tài khoản đăng nhập Cổng Quản trị / bản đồ điều hành (ADMIN, MANAGER) và trang tài xế (DRIVER), phân cấp quyền truy cập theo mô hình RBAC (Role-Based Access Control).
 
 | Tên trường | Kiểu dữ liệu | Ràng buộc | Giá trị mặc định | Giải thích nghiệp vụ |
 |---|---|---|---|---|
 | `user_id` | `INT` | `PK, AUTO_INCREMENT` | Tự tăng | Mã định danh duy nhất của người dùng |
 | `username` | `VARCHAR(50)` | `NOT NULL, UNIQUE` | Không | Tên tài khoản đăng nhập hệ thống |
 | `password_hash` | `VARCHAR(255)` | `NOT NULL` | Không | Mật khẩu băm an toàn qua thuật toán **Bcrypt (Cost factor = 10)** |
-| `full_name` | `VARCHAR(100)` | `NOT NULL` | Không | Họ và tên đầy đủ của cán bộ điều hành |
+| `full_name` | `VARCHAR(100)` | `NOT NULL` | Không | Họ và tên đầy đủ (hiển thị trên Cổng Quản trị, trang tài xế, lời chào sau đăng nhập) |
 | `email` | `VARCHAR(100)` | `NULL` | `NULL` | Địa chỉ thư điện tử liên hệ |
-| `role` | `ENUM('ADMIN','MANAGER','VIEWER')` | `NULL` | `'MANAGER'` | Vai trò: `ADMIN` (Toàn quyền), `MANAGER` (Quản lý dữ liệu), `VIEWER` (Chỉ xem) |
+| `role` | `ENUM('ADMIN','MANAGER','VIEWER','DRIVER')` | `NULL` | `'MANAGER'` | Vai trò: `ADMIN` (toàn quyền, kể cả quản lý người dùng), `MANAGER` (quản lý dữ liệu và điều hành), `DRIVER` (tài xế, chỉ trang tài xế và kênh `/device`), `VIEWER` (còn trong ENUM, không đăng nhập được) |
 | `created_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP` | Thời điểm khởi tạo tài khoản |
 
-* **Dữ liệu khởi tạo:** `admin` (role `ADMIN`, email `admin@busgis.vn`) và `manager` (role `MANAGER`, email `manager@busgis.vn`), nạp từ `schema.sql`.
+* **Dữ liệu khởi tạo:** `admin` (role `ADMIN`, email `admin@busgis.vn`, mật khẩu `admin123`) và `manager` (role `MANAGER`, email `manager@busgis.vn`, mật khẩu `manager123`), nạp từ `schema.sql`. `db:seed-drivers` thêm `driver01…driverNN` (role `DRIVER`, email `driverNN@busgis.vn`, mật khẩu mặc định `driver123`).
+* **Ràng buộc ở tầng ứng dụng:** API người dùng chỉ cho gán `ADMIN`, `MANAGER`, `DRIVER`; mật khẩu không bao giờ trả về qua API (các truy vấn danh sách chỉ chọn cột không nhạy cảm).
 
 ---
 
@@ -320,10 +351,13 @@ Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn
 | `vehicle_id` | `VARCHAR(20)` | `PRIMARY KEY` | Không | Mã định danh quản lý nội bộ (ví dụ: `BUS_51B_01`) |
 | `plate_number` | `VARCHAR(20)` | `NOT NULL, UNIQUE` | Không | Biển số đăng ký kiểm soát xe (ví dụ: `51B-123.45`) |
 | `capacity` | `INT` | `NULL` | `40` | Sức chứa tối đa của xe (số chỗ ngồi + chỗ đứng) |
-| `driver_name` | `VARCHAR(100)` | `NULL` | `NULL` | Họ tên tài xế chịu trách nhiệm vận hành |
-| `status` | `VARCHAR(30)` | `NULL` | `'ACTIVE'` | Trạng thái: `ACTIVE` (Hoạt động), `MAINTENANCE` (Bảo trì), `INACTIVE` (Nghỉ) |
+| `driver_name` | `VARCHAR(100)` | `NULL` | `NULL` | Tên tài xế **hiển thị** (văn bản tự do, nhập trên Cổng Quản trị); hiện trong danh sách chuyến của khách. Không liên kết tài khoản |
+| `status` | `VARCHAR(30)` | `NULL` | `'ACTIVE'` | Trạng thái: `ACTIVE` (Hoạt động), `MAINTENANCE` (Bảo trì), `INACTIVE` (Nghỉ). Chỉ để hiển thị; ứng dụng không chặn xe `MAINTENANCE`/`INACTIVE` chạy chuyến |
+| `driver_user_id` | `INT` | `NULL, UNIQUE, FK` | `NULL` | Tài khoản tài xế phụ trách xe, liên kết `users(user_id)` qua ràng buộc `fk_vehicles_driver` (`ON DELETE SET NULL`). `NULL` = xe chưa có tài xế, không thể phát GPS |
 
-* **Dữ liệu mẫu (seed trong `schema.sql`):** 4 xe `BUS_51B_01` … `BUS_51B_04` (biển số `51B-123.45`, `51B-678.90`, `51B-888.99`, `51B-456.78`), sức chứa 45 chỗ, trạng thái `ACTIVE`. Bảng không nằm trong `busdata.sql` nên `npm run db:import` không nạp/xóa dữ liệu xe.
+* **Dữ liệu mẫu (seed trong `schema.sql`):** 4 xe `BUS_51B_01` … `BUS_51B_04` (biển số `51B-123.45`, `51B-678.90`, `51B-888.99`, `51B-456.78`), sức chứa 45 chỗ, trạng thái `ACTIVE`, **chưa gán tài khoản tài xế**. Bảng không nằm trong `busdata.sql` nên `npm run db:import` không nạp/xóa dữ liệu xe.
+* **Dữ liệu demo (`db:seed-drivers`):** xe `DRV_01…DRV_NN`, biển số `51B-900.NN`, sức chứa 45, `ACTIVE`, `driver_name = 'Tài xế NN'`, `driver_user_id` trỏ tới tài khoản `driverNN`. Upsert theo `vehicle_id` nên chạy lại không làm mất nhật ký GPS.
+* **Ghi chú:** API `GET /vehicles` là công khai và trả `SELECT v.*` (kèm `driver_user_id`) cùng danh sách tuyến được phân công và tổng số chuyến (`GROUP_CONCAT`, `COUNT` qua `schedules`). Cổng Quản trị chỉ sửa 5 cột đầu, không sửa `driver_user_id`.
 
 ---
 
@@ -335,8 +369,11 @@ Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn
 | `schedule_id` | `INT` | `PK, AUTO_INCREMENT` | Tự tăng | Mã định danh chuyến xe phân công |
 | `route_id` | `VARCHAR(20)` | `NOT NULL, FK` | Không | Tuyến xe thực hiện chuyến, liên kết `bus_routes` |
 | `vehicle_id` | `VARCHAR(20)` | `NOT NULL, FK` | Không | Xe buýt được điều động chạy chuyến, liên kết `vehicles` |
-| `departure_time`| `TIME` | `NOT NULL` | Không | Giờ xuất bến theo kế hoạch (ví dụ: `06:00:00`, `06:30:00`) |
+| `departure_time`| `TIME` | `NOT NULL` | Không | Giờ xuất bến theo kế hoạch, hiểu theo giờ Việt Nam (UTC+7), lặp lại mỗi ngày (ví dụ: `06:00:00`, `06:30:00`) |
 | `direction` | `TINYINT` | `NOT NULL` | Không | Chiều di chuyển của chuyến xe (`1: Đi`, `2: Về`) |
+
+* **Dữ liệu demo (`db:seed-drivers`):** mỗi xe `DRV_NN` có 17 chuyến/ngày, xuất bến `05:00 + slot×15′ + k×60′` (slot = thứ tự tài xế trong tuyến, 0–3; k = 0–16), chiều đổi xen kẽ sau mỗi chuyến → mỗi tuyến có chuyến 15 phút một lần, mỗi chiều trung bình 30 phút một lần. Lịch của xe seed được xóa và tạo lại mỗi lần chạy.
+* **Cách đọc giờ:** server dùng `TIME_TO_SEC(departure_time)` để so với số giây trong ngày theo giờ VN, và `TIME_FORMAT(departure_time, '%H:%i')` để trả `HH:MM` cho trang tài xế và danh sách chuyến.
 
 ---
 
@@ -350,7 +387,10 @@ Hệ thống cơ sở dữ liệu của đề tài được thiết kế chuẩn
 | `speed_kmh` | `FLOAT` | `NULL` | `0.0` | Vận tốc tức thời đo được tại thời điểm phát tin ($km/h$) |
 | `heading` | `FLOAT` | `NULL` | `0.0` | Góc phương vị di chuyển của đầu xe ($0^\circ - 360^\circ$) |
 | `geom` | `POINT` | `NOT NULL, SPATIAL` | Không (SRID 4326) | Tọa độ GPS trắc địa: `POINT(longitude latitude)` |
-| `recorded_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP`| Nhãn thời gian chính xác ghi nhận gói tin GPS |
+| `recorded_at` | `TIMESTAMP` | `NOT NULL` | `CURRENT_TIMESTAMP`| Thời điểm CSDL chèn bản ghi (server không truyền nhãn thời gian của gói) |
+
+* **Cách ghi:** [tracking-log.js](../backend/src/sockets/tracking-log.js) chèn `INSERT … VALUES (vehicle_id, speed_kmh, heading, ST_GeomFromText('POINT(lon lat)', 4326))`, tối đa 1 bản ghi / xe / 5 giây (bộ đếm trong bộ nhớ, reset khi khởi động lại server). `speed_kmh` đã được kiểm tra 0–200, `heading` 0–<360.
+* **Cách đọc:** hiện chỉ có `SELECT COUNT(*)` cho thống kê Tổng quan; chưa có API đọc lại vết.
 
 ---
 
@@ -400,14 +440,28 @@ HAVING distance_m <= 300;
 5. **`ST_AsText(geometry)`:**
    * *Mục đích:* Xuất hình học ra dạng WKT, dùng trong script `db:export` để sinh tệp `busdata.sql`.
 
+**Nơi sử dụng trong mã nguồn:**
+
+| Hàm | Tệp | Dùng để |
+|---|---|---|
+| `ST_GeomFromText` | [stops.controller.js](../backend/src/modules/stops/stops.controller.js), [paths.controller.js](../backend/src/modules/paths/paths.controller.js), [import-export.controller.js](../backend/src/modules/import-export/import-export.controller.js), [tracking-log.js](../backend/src/sockets/tracking-log.js), [trip-plan](../backend/src/modules/trip-plan/), [export_busdata_sql.js](../backend/scripts/export_busdata_sql.js) | Ghi trạm, lộ trình, vết GPS; dựng điểm vị trí khách để đo khoảng cách; sinh lệnh `INSERT` trong `busdata.sql` |
+| `ST_AsGeoJSON` | [stops.controller.js](../backend/src/modules/stops/stops.controller.js), [paths.controller.js](../backend/src/modules/paths/paths.controller.js), [import-export.controller.js](../backend/src/modules/import-export/import-export.controller.js), [trip-list.js](../backend/src/sockets/trip-list.js) | Trả trạm/lộ trình cho bản đồ; xuất JSON; nạp lộ trình để tính ETA |
+| `ST_Distance_Sphere` | [trip-plan.service.js](../backend/src/modules/trip-plan/trip-plan.service.js), [trip-plan.controller.js](../backend/src/modules/trip-plan/trip-plan.controller.js) | Trạm trong 300 m quanh trạm đích; khoảng cách đi bộ từ khách tới từng trạm lên ứng viên |
+| `ST_X` / `ST_Y` | [trip-plan.service.js](../backend/src/modules/trip-plan/trip-plan.service.js), [trip-plan.controller.js](../backend/src/modules/trip-plan/trip-plan.controller.js), [trip-list.js](../backend/src/sockets/trip-list.js) | Lọc hộp bao; trả tọa độ số của trạm |
+| `ST_AsText` | [export_busdata_sql.js](../backend/scripts/export_busdata_sql.js) | Sinh `busdata.sql` |
+
+**Tính toán hình học ngoài CSDL:** phép chiếu vị trí xe/trạm lên lộ trình và quãng đường dọc tuyến (phục vụ ETA và "trạm kế tiếp" của trang tài xế) **không** dùng hàm SQL mà tính trong Node.js/trình duyệt: server ([route-geometry.js](../backend/src/sockets/route-geometry.js)) cộng dồn khoảng cách haversine giữa các đỉnh và chiếu điểm lên từng đoạn bằng xấp xỉ phẳng cục bộ; trang tài xế ([next-stop.js](../frontend/src/views/driver/features/next-stop.js)) và bản đồ khách ([path-clip.js](../frontend/src/views/map/features/trip-finder/path-clip.js)) dùng phép chiếu phẳng hiệu chỉnh kinh độ theo cos(vĩ độ). Server nạp `route_paths` + `route_stops` một lần cho mỗi (tuyến, chiều) và giữ trong bộ nhớ (xem [DATA_FLOW.md](DATA_FLOW.md)).
+
 ---
 
 ## 5. MÃ NGUỒN KHỞI TẠO CƠ SỞ DỮ LIỆU ĐẦY ĐỦ (DDL SQL SCRIPT)
 
+Trích nguyên văn từ [`database/schema.sql`](../database/schema.sql) (DDL 8 bảng + dữ liệu mẫu). Dữ liệu 4 bảng tĩnh nằm trong `database/busdata.sql`.
+
 ```sql
 -- ====================================================================
--- HỆ THỐNG CƠ SỞ DỮ LIỆU QUẢN LÝ XE BUÝT 2D (MYSQL 8.0 / MARIADB SPATIAL)
--- Hệ quy chiếu: WGS84 (SRID 4326) | Quy ước trục: axis-order=long-lat
+-- HỆ THỐNG CƠ SỞ DỮ LIỆU QUẢN LÝ XE BUÝT (MYSQL 8.0 / MARIADB SPATIAL)
+-- Hệ quy chiếu: WGS84 (SRID 4326), Quy ước trục: axis-order=long-lat
 -- ====================================================================
 
 CREATE DATABASE IF NOT EXISTS bus_management_db 
@@ -415,27 +469,28 @@ CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE bus_management_db;
 
--- 1. Bảng Tài khoản & Phân quyền Quản trị
+-- Xóa bảng cũ theo thứ tự con → cha (vehicles tham chiếu users, logs/schedules tham chiếu vehicles)
+DROP TABLE IF EXISTS vehicle_tracking_logs;
+DROP TABLE IF EXISTS schedules;
+DROP TABLE IF EXISTS route_stops;
+DROP TABLE IF EXISTS route_paths;
+DROP TABLE IF EXISTS vehicles;
+DROP TABLE IF EXISTS bus_stops;
+DROP TABLE IF EXISTS bus_routes;
 DROP TABLE IF EXISTS users;
+
+-- 0. Bảng Người dùng & Phân quyền (ADMIN/MANAGER quản trị, DRIVER tài xế)
 CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     email VARCHAR(100),
-    role ENUM('ADMIN', 'MANAGER', 'VIEWER') DEFAULT 'MANAGER',
+    role ENUM('ADMIN', 'MANAGER', 'VIEWER', 'DRIVER') DEFAULT 'MANAGER',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- 2. Bảng Danh mục Tuyến xe buýt
-DROP TABLE IF EXISTS route_stops;
-DROP TABLE IF EXISTS route_paths;
-DROP TABLE IF EXISTS vehicle_tracking_logs;
-DROP TABLE IF EXISTS schedules;
-DROP TABLE IF EXISTS vehicles;
-DROP TABLE IF EXISTS bus_stops;
-DROP TABLE IF EXISTS bus_routes;
-
+-- 1. Bảng Tuyến xe buýt (Thực thể thuộc tính)
 CREATE TABLE bus_routes (
     route_id VARCHAR(20) PRIMARY KEY,
     route_number VARCHAR(10) NOT NULL,
@@ -448,17 +503,17 @@ CREATE TABLE bus_routes (
     headway_text VARCHAR(20) NULL
 ) ENGINE=InnoDB;
 
--- 3. Bảng Lộ trình tim đường (Thực thể Không gian: LineString)
+-- 2. Bảng Lộ trình tuyến đường (Thực thể Không gian: LineString)
 CREATE TABLE route_paths (
     path_id INT AUTO_INCREMENT PRIMARY KEY,
     route_id VARCHAR(20) NOT NULL,
-    direction TINYINT NOT NULL COMMENT '1: Lượt đi, 2: Lượt về',
+    direction TINYINT NOT NULL COMMENT '1: Đi, 2: Về',
     geom LINESTRING NOT NULL /* SRID 4326 */,
     SPATIAL INDEX(geom),
     FOREIGN KEY (route_id) REFERENCES bus_routes(route_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 4. Bảng Trạm dừng xe buýt (Thực thể Không gian: Point)
+-- 3. Bảng Trạm dừng xe buýt (Thực thể Không gian: Point)
 CREATE TABLE bus_stops (
     stop_id VARCHAR(20) PRIMARY KEY,
     stop_code VARCHAR(30) NULL,
@@ -470,7 +525,8 @@ CREATE TABLE bus_stops (
     SPATIAL INDEX(geom)
 ) ENGINE=InnoDB;
 
--- 5. Bảng liên kết Thứ tự Trạm dừng trên Tuyến (Quan hệ M - N)
+-- 4. Bảng liên kết Thứ tự Trạm dừng trên Tuyến (Quan hệ M - N)
+-- PK theo (route_id, direction, stop_order): một trạm có thể ghé nhiều lần trên tuyến vòng
 CREATE TABLE route_stops (
     route_id VARCHAR(20) NOT NULL,
     stop_id VARCHAR(20) NOT NULL,
@@ -482,27 +538,29 @@ CREATE TABLE route_stops (
     FOREIGN KEY (stop_id) REFERENCES bus_stops(stop_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 6. Bảng Phương tiện xe buýt
+-- 5. Bảng Phương tiện xe buýt
 CREATE TABLE vehicles (
     vehicle_id VARCHAR(20) PRIMARY KEY,
     plate_number VARCHAR(20) NOT NULL UNIQUE,
     capacity INT DEFAULT 40,
     driver_name VARCHAR(100),
-    status VARCHAR(30) DEFAULT 'ACTIVE'
+    status VARCHAR(30) DEFAULT 'ACTIVE',
+    driver_user_id INT NULL UNIQUE,                  -- Tài khoản tài xế phụ trách (1 tài xế ↔ 1 xe)
+    CONSTRAINT fk_vehicles_driver FOREIGN KEY (driver_user_id) REFERENCES users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
--- 7. Bảng Lịch trình & Phân công chuyến xe
+-- 6. Bảng Lịch trình khởi hành
 CREATE TABLE schedules (
     schedule_id INT AUTO_INCREMENT PRIMARY KEY,
     route_id VARCHAR(20) NOT NULL,
     vehicle_id VARCHAR(20) NOT NULL,
     departure_time TIME NOT NULL,
-    direction TINYINT NOT NULL COMMENT '1: Đi, 2: Về',
+    direction TINYINT NOT NULL,
     FOREIGN KEY (route_id) REFERENCES bus_routes(route_id) ON DELETE CASCADE,
     FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- 8. Bảng Nhật ký vết xe GPS (Spatio-Temporal Tracking Log)
+-- 7. Bảng Nhật ký vết xe (Spatial Temporal: Điểm động theo thời gian)
 CREATE TABLE vehicle_tracking_logs (
     log_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     vehicle_id VARCHAR(20) NOT NULL,
@@ -514,4 +572,23 @@ CREATE TABLE vehicle_tracking_logs (
     INDEX(vehicle_id, recorded_at),
     FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
+
+-- ====================================================================
+-- SEED DỮ LIỆU MẪU (tài khoản & xe buýt)
+-- ====================================================================
+
+-- Nạp Tài khoản Quản trị mẫu (Mật khẩu: admin123 / manager123)
+INSERT INTO users (username, password_hash, full_name, email, role) VALUES
+('admin', '$2b$10$be/YCW2AyTX1gvBhWxR5cOS1Ge1cKIogArSfSYQ.Aj79eofoXleWK', 'Quản trị viên Hệ thống', 'admin@busgis.vn', 'ADMIN'),
+('manager', '$2b$10$PuxC1Sqo0DlyCRYGpQj8buYs8D0JMXfx.921s1thBPsbnW1aIS7Om', 'Quản lý Điều hành', 'manager@busgis.vn', 'MANAGER');
+
+-- Tuyến, trạm, lộ trình và trạm-tuyến TP.HCM nằm trong database/busdata.sql
+-- Nạp bằng: cd backend && npm run db:import
+
+-- Nạp Xe buýt
+INSERT INTO vehicles (vehicle_id, plate_number, capacity, driver_name, status) VALUES
+('BUS_51B_01', '51B-123.45', 45, 'Nguyễn Văn A', 'ACTIVE'),
+('BUS_51B_02', '51B-678.90', 45, 'Trần Văn B', 'ACTIVE'),
+('BUS_51B_03', '51B-888.99', 45, 'Lê Văn C', 'ACTIVE'),
+('BUS_51B_04', '51B-456.78', 45, 'Phạm Văn D', 'ACTIVE');
 ```
