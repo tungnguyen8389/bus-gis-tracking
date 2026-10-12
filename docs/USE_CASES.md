@@ -1,6 +1,6 @@
 # ĐẶC TẢ USE CASE — HỆ THỐNG WEB GIS GIÁM SÁT XE BUÝT 2D
 
-> Tài liệu được tổng hợp từ mã nguồn hiện tại (backend `backend/src`, frontend `frontend/src`, công cụ `tools/`, script `backend/scripts`). Chỉ mô tả những chức năng **đã cài đặt**; các chức năng chưa có được liệt kê ở mục [7. Hạn chế / chưa hỗ trợ](#7-hạn-chế--chưa-hỗ-trợ).
+> Tài liệu được tổng hợp từ mã nguồn hiện tại (backend `backend/src`, frontend `frontend/src`, công cụ `tools/`, script `backend/scripts`, `simulator/`). Đối chiếu lại với code ngày 12/10/2026. Chỉ mô tả những chức năng **đã cài đặt**; các chức năng chưa có được liệt kê ở mục [7. Hạn chế / chưa hỗ trợ](#7-hạn-chế--chưa-hỗ-trợ).
 
 ---
 
@@ -15,9 +15,12 @@ Hệ thống gồm ba giao diện và một kênh realtime:
 | REST API | `http://localhost:3000/api/v1` (`backend/src/modules/*`) | Hai trang trên |
 | Hub realtime Socket.io | `backend/src/sockets/` — namespace `/` (viewer: nhận vị trí theo room, gửi đăng ký theo dõi) và `/device` (tài xế, JWT) | Tài xế / simulator gửi lên, bản đồ nhận về |
 | Trang tài xế | `frontend/driver.html` → `src/views/driver/` | Tài xế (DRIVER) |
-| Công cụ dữ liệu ngoại tuyến | `tools/get_coords_1.html`, `tools/google_maps_importer.html`, `npm run db:import / db:export` | Người duy trì dữ liệu |
+| Công cụ dữ liệu ngoại tuyến | `tools/get_coords_1.html`, `tools/google_maps_importer.html`, `npm run db:import / db:export / db:seed-drivers` | Người duy trì dữ liệu |
+| Simulator (công cụ demo) | `simulator/` — tài xế ảo đăng nhập như tài xế thật, phát GPS qua `/device` | Nhóm phát triển khi demo |
 
-Dữ liệu hiện có: 178 tuyến, 5.898 trạm, 332 lộ trình xe buýt TP.HCM (`database/busdata.sql`), cùng 4 xe và 2 tài khoản mẫu (`database/schema.sql`).
+Backend phục vụ luôn giao diện tĩnh cùng cổng: `http://localhost:3000/` chuyển tới `/frontend/index.html`; trang quản trị và trang tài xế ở `/frontend/admin.html`, `/frontend/driver.html`; công cụ ở `/tools/…`.
+
+Dữ liệu hiện có: 178 tuyến, 5.898 trạm, 332 lộ trình xe buýt TP.HCM (`database/busdata.sql`), cùng 4 xe và 2 tài khoản mẫu `admin` / `manager` (`database/schema.sql`). Tài khoản tài xế demo (`driver01`…, xe `DRV_01`…, lịch chạy cả ngày) được tạo bằng `npm run db:seed-drivers` (UC-22).
 
 ---
 
@@ -25,14 +28,14 @@ Dữ liệu hiện có: 178 tuyến, 5.898 trạm, 332 lộ trình xe buýt TP.H
 
 | Tác nhân | Mô tả | Cách xác định trong code |
 |---|---|---|
-| **Hành khách (Khách)** | Người dùng ẩn danh mở bản đồ để tìm tuyến và xem xe chạy. Không cần tài khoản. | Không có token hoặc token không hợp lệ → `applyAuthState(null)` hiển thị `guestTripPanel` ([staff-auth.js](../frontend/src/views/map/features/staff-auth.js)) |
+| **Hành khách (Khách)** | Người dùng ẩn danh mở bản đồ để tìm tuyến, xem các chuyến sắp tới kèm ETA và theo dõi đúng 1 xe mình định đi. Không cần tài khoản. | Không có token hoặc token không hợp lệ → `applyAuthState(null)` hiển thị `guestTripPanel` ([staff-auth.js](../frontend/src/views/map/features/staff-auth.js)) |
 | **Quản lý điều hành (MANAGER)** | Nhân viên vận hành. Được làm mọi thao tác quản trị dữ liệu **trừ** thêm/sửa/xóa người dùng. | `role = 'MANAGER'`; các route ghi dữ liệu yêu cầu `authenticateToken` + `requireStaff` |
 | **Quản trị viên (ADMIN)** | Có toàn bộ quyền của MANAGER, thêm quyền quản lý tài khoản người dùng. | `role = 'ADMIN'`; route `/users` (POST/PUT/DELETE) có thêm `requireAdmin` ([auth.js](../backend/src/middleware/auth.js)) |
-| **Tài xế (DRIVER)** | Người lái xe. Đăng nhập trang tài xế, chọn chuyến của xe mình, xem bản đồ tuyến và phát GPS từ điện thoại. | `role = 'DRIVER'`, được gán xe qua `vehicles.driver_user_id`; đăng nhập qua `POST /auth/driver/login` |
+| **Tài xế (DRIVER)** | Người lái xe. Đăng nhập trang tài xế, chọn chuyến của xe mình, xem bản đồ tuyến và phát GPS từ điện thoại. | `role = 'DRIVER'`, được gán xe qua `vehicles.driver_user_id` (1 tài xế ↔ 1 xe); đăng nhập qua `POST /auth/driver/login`, JWT hạn 12 giờ |
 | **Nguồn GPS** (tác nhân hệ thống) | Thiết bị phát `gps_ping` qua namespace `/device`: điện thoại của tài xế hoặc simulator (tài xế ảo, công cụ demo trong `simulator/`). | Phải có JWT của tài xế đã gán xe; server tự điền danh tính xe |
 | **Người duy trì dữ liệu** | Thành viên nhóm xây dựng/cập nhật bộ dữ liệu tuyến–trạm–lộ trình bằng công cụ ngoại tuyến và script CLI. | Chạy `npm run db:import`, `npm run db:export`, mở các tệp trong `tools/` |
 
-**Ghi chú về vai trò `VIEWER`:** giá trị này có trong ENUM của bảng `users` nhưng **không sử dụng được** — `POST /auth/login` trả 403 với mọi vai trò khác ADMIN/MANAGER, và form tạo người dùng chỉ cho chọn ADMIN hoặc MANAGER.
+**Ghi chú về vai trò `VIEWER`:** giá trị này có trong ENUM của bảng `users` nhưng **không sử dụng được** — `POST /auth/login` trả 403 với mọi vai trò khác ADMIN/MANAGER, `POST /auth/driver/login` chỉ nhận DRIVER, và API người dùng chỉ cho gán ADMIN, MANAGER hoặc DRIVER (`ALLOWED_ROLES`).
 
 ADMIN và MANAGER gọi chung là **Nhân viên** trong tài liệu này.
 
@@ -81,7 +84,7 @@ flowchart LR
         UC19(["UC-19 Gửi & phát vị trí GPS"])
         UC20(["UC-20 Xây dựng tuyến & trích xuất tọa độ"])
         UC21(["UC-21 Chuyển tọa độ Google Maps"])
-        UC22(["UC-22 Nạp / xuất bộ dữ liệu busdata.sql"])
+        UC22(["UC-22 Nạp / xuất busdata.sql, tạo tài xế demo"])
     end
 
     Khach --- UC01 & UC02 & UC03 & UC05
@@ -98,6 +101,8 @@ flowchart LR
     TX --- UC23
     UC23 -. phát qua /device .-> UC19
     UC19 -. cung cấp dữ liệu .-> UC05
+    UC15 -. lịch chạy, giờ xuất bến .-> UC05
+    UC15 -. chuyến của xe .-> UC23
 
     DM --- UC20 & UC21 & UC22
     UC20 -. xuất JSON cho .-> UC16
@@ -113,7 +118,7 @@ flowchart LR
 | UC-02 | Tìm trạm đến theo tên / địa chỉ | Khách | Bản đồ – panel "Tìm tuyến xe buýt" | `GET /stops` (nạp một lần) |
 | UC-03 | Tìm tuyến đi thẳng tới điểm đến | Khách | Bản đồ – panel "Tìm tuyến xe buýt" | `GET /trip-plan` |
 | UC-04 | Xem hành trình của tuyến gợi ý | Khách | Bản đồ | `GET /routes/:id/path` |
-| UC-05 | Theo dõi xe buýt realtime | Khách, Nhân viên | Bản đồ – bảng "Theo dõi xe" | Socket `fleet_location_update` |
+| UC-05 | Theo dõi xe buýt realtime | Khách, Nhân viên | Bản đồ – danh sách chuyến dưới thẻ tuyến, bảng "Theo dõi xe" | Socket `/`: `trips:subscribe` → `trips:update`, `trip:watch` → `fleet_location_update`, `vehicle_offline` |
 | UC-06 | Đăng nhập / đăng xuất nhân viên | Nhân viên | Modal đăng nhập (bản đồ), màn hình đăng nhập (admin) | `POST /auth/login`, `GET /auth/me` |
 | UC-07 | Duyệt tuyến theo chiều | Nhân viên | Bản đồ – panel "Lộ trình xe buýt" | `GET /routes`, `GET /routes/:id/path`, `GET /routes/:id/stops`, `GET /stops` |
 | UC-08 | Tìm trạm trong danh sách đang hiển thị | Nhân viên | Bản đồ – panel "Lộ trình xe buýt" | — (lọc phía client) |
@@ -127,10 +132,10 @@ flowchart LR
 | UC-16 | Nhập dữ liệu JSON | Nhân viên | Admin – tab Nhập/Xuất JSON | `POST /import/json` |
 | UC-17 | Sao lưu dữ liệu JSON | Nhân viên | Admin – tab Nhập/Xuất JSON | `GET /export/json` |
 | UC-18 | Quản lý người dùng | ADMIN | Admin – tab Quản lý Người dùng | `GET/POST /users`, `PUT/DELETE /users/:id` |
-| UC-19 | Gửi & phát vị trí GPS | Nguồn GPS | — | Socket `/device` `gps_ping` → `/` `fleet_location_update`, `vehicle_offline` |
+| UC-19 | Gửi & phát vị trí GPS | Nguồn GPS | — | Socket `/device` `trip:start`, `gps_ping`, `trip:end` → `/` `fleet_location_update`, `vehicle_offline` (room `trip:<id>`, `vehicle:<id>`, `staff`) |
 | UC-20 | Xây dựng tuyến & trích xuất tọa độ | Người duy trì dữ liệu | `tools/get_coords_1.html` | OSRM công khai (bám đường) |
 | UC-21 | Chuyển tọa độ Google Maps | Người duy trì dữ liệu | `tools/google_maps_importer.html` | — |
-| UC-22 | Nạp / xuất bộ dữ liệu busdata.sql | Người duy trì dữ liệu | CLI | `npm run db:import`, `npm run db:export` |
+| UC-22 | Nạp / xuất bộ dữ liệu busdata.sql, tạo tài xế demo | Người duy trì dữ liệu | CLI | `npm run db:import`, `npm run db:export`, `npm run db:seed-drivers` |
 | UC-23 | Tài xế chạy chuyến & phát GPS | Tài xế | Trang tài xế | `POST /auth/driver/login`, `GET /driver/me`, Socket `/device`: `trip:start`, `gps_ping`, `trip:end` |
 
 ---
@@ -217,15 +222,25 @@ flowchart LR
   2. Tìm tuyến (UC-03) rồi bấm một thẻ tuyến: bản đồ chỉ vẽ lộ trình; dưới thẻ hiện danh sách chuyến **đang chạy** và **sắp tới** (giờ xuất bến trong 2 giờ tới, hoặc trễ ≤ 15 phút), mỗi dòng có giờ xuất bến, biển số, tài xế, nhãn trạng thái và **ETA tới trạm lên** (`~HH:MM (X phút)`).
   3. Bấm một chuyến: bản đồ hiện **đúng 1 xe** của chuyến đó; bảng "Theo dõi xe" hiện tuyến, biển số, tài xế, tốc độ, giờ xuất bến và ETA.
   4. ETA và trạng thái tự cập nhật (server đẩy `trips:update` mỗi 15 giây và ngay khi chuyến bắt đầu/kết thúc).
-- **Luồng chính (Nhân viên):** đăng nhập (UC-06) → thấy mọi xe đang chạy; chọn tuyến (UC-07) để lọc.
+- **Luồng chính (Nhân viên):**
+  1. Đăng nhập (UC-06) → socket kết nối lại kèm token nhân viên, vào room `staff` → thấy mọi xe đang chạy (marker đỏ, di chuyển mượt bằng nội suy).
+  2. Chọn tuyến (UC-07) để chỉ hiện xe của tuyến đó.
+  3. Bảng "Theo dõi xe" tự chọn xe đầu tiên nhận được của tuyến đang hiển thị: tuyến, biển số, tốc độ, tọa độ và "trạm tiếp theo" (trạm gần xe nhất theo đường chim bay). Bấm marker xe để xem popup biển số, tuyến, vận tốc, hướng.
 - **Luồng thay thế:**
   - Chọn chuyến chưa xuất bến → bảng ghi "Chưa xuất bến — dự kiến HH:MM"; xe tự hiện khi tài xế bắt đầu chuyến.
-  - Xe đã qua trạm lên → dòng mờ "Đã qua trạm của bạn", không chọn được; nếu đang theo dõi thì bảng ghi "Xe đã qua trạm của bạn".
+  - Xe đã qua trạm lên (quá 30 m dọc tuyến) → dòng mờ "Đã qua trạm của bạn", xếp cuối, không chọn được; nếu đang theo dõi thì bảng ghi "Xe đã qua trạm của bạn".
   - Khách không bật định vị (không có trạm lên) → danh sách không có ETA.
+  - Không có chuyến nào trong cửa sổ → "Hiện không có chuyến nào trong 2 giờ tới".
+  - Chuyến đã báo kết thúc nhưng thiết bị nối lại và chạy tiếp (có gói vị trí mới hoặc `trips:update` báo RUNNING) → bỏ trạng thái "Chuyến đã kết thúc", xe hiện lại.
 - **Luồng ngoại lệ:**
-  - Mất kết nối → nhãn **OFFLINE**; kết nối lại thì tự đăng ký lại danh sách và chuyến đang theo dõi.
-  - Chuyến kết thúc / không còn công khai → gỡ xe, bảng ghi "Chuyến đã kết thúc".
-- **Ghi chú:** ETA = quãng đường dọc lộ trình tới trạm lên ÷ vận tốc thực tế của xe (quãng đã đi trong 5 phút gần nhất, kẹp 5–60 km/h). Chuyến sắp tới dùng vận tốc trung bình của các xe đang chạy cùng tuyến (mặc định 20 km/h).
+  - Mất kết nối → nhãn **OFFLINE**; kết nối lại thì tự đăng ký lại danh sách và chuyến đang theo dõi. Lỗi tạm thời (hết giờ chờ ack 5 giây, chưa có socket) giữ nguyên chuyến đang theo dõi để đăng ký lại.
+  - Chuyến kết thúc (`vehicle_offline`) hoặc không còn công khai (`trip:watch` trả `TRIP_NOT_AVAILABLE`) → gỡ xe, bảng ghi "Chuyến đã kết thúc".
+  - Khách bấm nhiều chuyến liên tiếp → chỉ lệnh sau cùng có hiệu lực; mọi lệnh `trip:watch` đều rời chuyến cũ trước, kể cả khi lệnh mới thất bại.
+  - Lỗi tải danh sách → "Không tải được danh sách chuyến".
+- **Ghi chú:**
+  - Khách **không bao giờ** nhận tọa độ của xe khác: `trips:update` chỉ có giờ xuất bến, biển số, tài xế, trạng thái, ETA; tọa độ chỉ đi qua room `trip:<schedule_id>` sau khi `trip:watch`.
+  - Chuyến công khai = đang chạy, hoặc giờ xuất bến (giờ VN) trong khoảng từ 15 phút trước tới 2 giờ sau thời điểm hiện tại.
+  - ETA = quãng đường dọc lộ trình tới trạm lên ÷ vận tốc thực tế của xe (quãng đã đi trong 5 phút gần nhất, cần ≥ 2 phút dữ liệu, kẹp 5–60 km/h; thiếu dữ liệu thì dùng trung bình `speed_kmh` của các gói). Chuyến sắp tới: tính từ giờ xuất bến (hoặc từ bây giờ nếu đã trễ) với vận tốc trung bình của các xe đang chạy cùng tuyến (mặc định 20 km/h).
 - **Code:** [trip-watch.js](../frontend/src/views/map/features/trip-finder/trip-watch.js), [trip-finder.js](../frontend/src/views/map/features/trip-finder/trip-finder.js), [fleet-tracking.js](../frontend/src/views/map/features/fleet-tracking.js), [viewer.socket.js](../backend/src/sockets/viewer.socket.js), [trip-list.js](../backend/src/sockets/trip-list.js).
 
 #### UC-06 — Đăng nhập / đăng xuất nhân viên
@@ -238,14 +253,15 @@ flowchart LR
   3. Server so khớp bcrypt, kiểm tra vai trò ADMIN/MANAGER, cấp JWT hạn 24 giờ.
   4. Token lưu vào `localStorage` với khóa `bus_admin_token` — **dùng chung** cho `index.html` và `admin.html`, nên chỉ cần đăng nhập một lần.
   5. Sidebar chuyển sang panel điều hành (UC-07), hiện nút **Quản Trị** (mở `admin.html` ở tab mới) và **Đăng xuất**; chiều di chuyển đặt lại về Lượt đi; toast "Xin chào …".
+  6. Socket realtime được tạo lại kèm token nhân viên → vào room `staff`, bắt đầu nhận vị trí mọi xe (UC-05).
 - **Luồng chính (trên trang quản trị):** Màn hình đăng nhập toàn trang; đăng nhập thành công → gọi `GET /auth/me`, hiển thị họ tên và vai trò ở sidebar, nạp tab Tổng quan. MANAGER không thấy mục **Quản lý Người dùng**.
 - **Luồng thay thế — phiên còn hạn:** Khi mở trang, nếu đã có token, hệ thống gọi `GET /auth/me`; hợp lệ thì vào thẳng chế độ nhân viên.
 - **Luồng ngoại lệ:**
   - Thiếu thông tin → 400; sai tên/mật khẩu → 401 "Tên đăng nhập hoặc mật khẩu không chính xác".
-  - Vai trò khác ADMIN/MANAGER → 403 "Tài khoản không có quyền truy cập trang quản trị".
+  - Vai trò khác ADMIN/MANAGER (kể cả DRIVER) → 403 "Tài khoản không có quyền truy cập trang quản trị".
   - Không kết nối được server → "Không thể kết nối đến máy chủ (Port 3000)".
   - Token hết hạn/không hợp lệ (401/403 từ `/auth/me`) → xóa token, quay về trạng thái khách hoặc màn hình đăng nhập.
-- **Đăng xuất:** Xóa token. Trên bản đồ: quay về trạng thái khách (xóa lộ trình, hiện mọi xe, tải chỉ mục trạm nếu chưa có). Trên trang quản trị: tải lại trang.
+- **Đăng xuất:** Xóa token. Trên bản đồ: quay về trạng thái khách — socket được tạo lại không token (rời room `staff`), gỡ mọi xe khỏi bản đồ, xóa lộ trình, tải chỉ mục trạm nếu chưa có; khách chỉ thấy xe lại khi chọn theo dõi một chuyến (UC-05). Trên trang quản trị: tải lại trang.
 - **Code:** [auth.controller.js](../backend/src/modules/auth/auth.controller.js), [staff-auth.js](../frontend/src/views/map/features/staff-auth.js), [admin/features/auth.js](../frontend/src/views/admin/features/auth.js).
 
 #### UC-07 — Duyệt tuyến theo chiều
@@ -328,6 +344,7 @@ Tiền điều kiện chung: đã đăng nhập với vai trò ADMIN hoặc MANA
 - **Luồng chính — xóa:** Xác nhận → `DELETE /vehicles/:vehicle_id`.
 - **Luồng thay thế:** Bấm biểu tượng lịch trên một dòng → mở form phân công chuyến (UC-15) với xe được chọn sẵn.
 - **Hậu điều kiện khi xóa:** Lịch phân công và nhật ký GPS (`vehicle_tracking_logs`) của xe bị xóa theo.
+- **Ghi chú:** Trường **tài xế** trên form là tên hiển thị tự do (`driver_name`, hiện trong danh sách chuyến của khách). Liên kết xe ↔ tài khoản tài xế (`driver_user_id`, dùng để đăng nhập và phát GPS) **không** chỉnh được ở đây — xem mục 7.
 - **Code:** [vehicles.controller.js](../backend/src/modules/vehicles/vehicles.controller.js), [vehicles.js](../frontend/src/views/admin/features/vehicles.js).
 
 #### UC-15 — Phân công chuyến xe
@@ -338,8 +355,12 @@ Tiền điều kiện chung: đã đăng nhập với vai trò ADMIN hoặc MANA
 - **Luồng ngoại lệ:** Thiếu tuyến/xe/giờ → 400.
 - **Ghi chú:**
   - Hệ thống không kiểm tra trùng lịch (một xe có thể được phân hai chuyến cùng giờ).
-  - Ngoài trang quản trị, lịch trình được trang tài xế (UC-23) đọc qua `GET /driver/me` để tài xế chọn chuyến; server kiểm tra lịch trình thuộc xe của tài xế khi `trip:start`. Bản đồ công khai không đọc bảng này.
-  - Trường **giờ xuất bến** (`departure_time`) chỉ để hiển thị trên trang tài xế; hệ thống không ép chạy theo giờ.
+  - Lịch trình lặp lại mỗi ngày (chỉ có giờ, không có ngày/thứ trong tuần).
+  - Ngoài trang quản trị, lịch trình được dùng ở ba nơi:
+    - Trang tài xế (UC-23) đọc qua `GET /driver/me` để tài xế chọn chuyến; server kiểm tra lịch trình thuộc xe của tài xế khi `trip:start`.
+    - Bản đồ công khai (UC-05): danh sách chuyến của khách và `trip:watch` đọc `schedules` để lọc chuyến công khai (giờ xuất bến từ 15 phút trước tới 2 giờ sau) và tính ETA cho chuyến sắp tới.
+    - Simulator chọn chuyến theo giờ VN và tự đổi sang chuyến kế tiếp khi tới giờ xuất bến.
+  - Server **không ép** chạy đúng giờ: tài xế có thể `trip:start` bất kỳ lịch trình nào của xe mình vào bất kỳ lúc nào, và chuyến không tự kết thúc theo giờ.
 - **Code:** [schedules.controller.js](../backend/src/modules/schedules/schedules.controller.js), [schedules.js](../frontend/src/views/admin/features/schedules.js).
 
 #### UC-16 — Nhập dữ liệu JSON
@@ -383,13 +404,17 @@ Tiền điều kiện chung: đã đăng nhập với vai trò ADMIN hoặc MANA
 - **Tác nhân:** ADMIN.
 - **Luồng chính:**
   1. Mở tab **Quản lý Người dùng** (MANAGER không thấy mục này) → bảng người dùng: ID, tên đăng nhập, họ tên, email, vai trò, ngày tạo.
-  2. **Thêm:** nhập tên đăng nhập, mật khẩu, họ tên (bắt buộc), email, vai trò ADMIN/MANAGER (mặc định MANAGER) → `POST /users`; mật khẩu băm bcrypt (salt 10).
+  2. **Thêm:** nhập tên đăng nhập, mật khẩu, họ tên (bắt buộc), email, vai trò ADMIN / MANAGER / DRIVER (mặc định MANAGER) → `POST /users`; mật khẩu băm bcrypt (salt 10).
   3. **Sửa:** tên đăng nhập bị khóa; sửa họ tên, email, vai trò; để trống mật khẩu nếu không đổi → `PUT /users/:id`.
   4. **Xóa:** xác nhận → `DELETE /users/:id`.
 - **Luồng ngoại lệ:**
   - Người gọi không phải ADMIN → 403 "Chỉ quản trị viên cấp cao (ADMIN) mới có quyền thực hiện thao tác này".
+  - Vai trò ngoài ADMIN/MANAGER/DRIVER (vd. VIEWER, hoặc bỏ trống khi sửa) → 400 "Vai trò không hợp lệ".
   - Xóa chính tài khoản đang đăng nhập → 400 "Không thể tự xóa tài khoản đang đăng nhập".
   - Trùng tên đăng nhập → 500 kèm thông báo lỗi.
+- **Ghi chú:**
+  - Tạo tài khoản DRIVER **chưa** gán xe: tài xế đăng nhập sẽ nhận 403 "Tài xế chưa được gán xe" cho tới khi `vehicles.driver_user_id` được đặt (seed hoặc SQL — mục 7).
+  - Xóa tài khoản tài xế → xe của tài xế được bỏ liên kết (`driver_user_id` = NULL, `ON DELETE SET NULL`), xe và lịch trình vẫn còn.
 - **Code:** [users.controller.js](../backend/src/modules/users/users.controller.js), [users.js](../frontend/src/views/admin/features/users.js).
 
 ### 5.3. Nhóm Realtime & dữ liệu
@@ -399,17 +424,20 @@ Tiền điều kiện chung: đã đăng nhập với vai trò ADMIN hoặc MANA
 - **Tác nhân:** Nguồn GPS: điện thoại của tài xế (UC-23) hoặc simulator `simulator/` (công cụ demo).
 - **Tiền điều kiện:** Thiết bị kết nối namespace `/device` với JWT của tài xế (role DRIVER) đang được gán xe. Sai token → `connect_error: UNAUTHORIZED`; chưa gán xe → `NO_VEHICLE`.
 - **Luồng chính:**
-  1. Thiết bị gửi `trip:start { schedule_id }` (có ack). Server kiểm tra lịch trình thuộc xe của tài xế rồi gắn tuyến + chiều vào phiên.
-  2. Thiết bị gửi `gps_ping { latitude, longitude, speed_kmh?, heading? }`. Server kiểm tra định dạng/khoảng giá trị, bỏ gói cách gói trước < 250 ms, rồi **tự dựng** gói `{ vehicle_id, plate_number, route_id, route_number, direction, longitude, latitude, speed_kmh, heading, timestamp }` từ phiên đã xác thực (không tin `vehicle_id` client gửi).
-  3. Gói được phát qua `fleet_location_update` tới room chuyến (khách đã chọn chuyến), room xe (trang tài xế) và `staff` (phục vụ UC-05).
-  4. Ghi `vehicle_tracking_logs` tối đa 1 bản ghi / xe / 5 giây.
-  5. `trip:end` hoặc mất kết nối khi đang có chuyến → phát `vehicle_offline { vehicle_id }`, bản đồ gỡ xe.
+  1. Thiết bị gửi `trip:start { schedule_id }` (có ack). Server kiểm tra lịch trình thuộc xe của tài xế rồi gắn tuyến + chiều vào phiên, ghi chuyến vào **registry chuyến đang chạy** (bộ nhớ) và đẩy `trips:update` cho khách đang xem tuyến đó. Nếu xe đang chạy một chuyến khác thì chuyến cũ được kết thúc trước (phát `vehicle_offline` cho chuyến cũ).
+  2. Thiết bị gửi `gps_ping { latitude, longitude, speed_kmh?, heading? }`. Gói chỉ được xử lý khi phiên đã có chuyến. Server kiểm tra định dạng/khoảng giá trị (vĩ độ ±90, kinh độ ±180, tốc độ 0–200 km/h, hướng 0–<360°), bỏ gói cách gói trước < 250 ms, rồi **tự dựng** gói `{ vehicle_id, plate_number, schedule_id, route_id, route_number, direction, longitude, latitude, speed_kmh, heading, timestamp }` từ phiên đã xác thực (không tin `vehicle_id` client gửi).
+  3. Gói được phát qua `fleet_location_update` tới room chuyến `trip:<schedule_id>` (khách đã chọn chuyến), room xe `vehicle:<vehicle_id>` (trang tài xế) và `staff` (phục vụ UC-05).
+  4. Registry lưu vị trí cuối và mẫu vận tốc (1 mẫu / 15 giây, giữ 5 phút) để tính ETA.
+  5. Ghi `vehicle_tracking_logs` tối đa 1 bản ghi / xe / 5 giây.
+  6. `trip:end` hoặc mất kết nối khi đang có chuyến → xóa chuyến khỏi registry, phát `vehicle_offline { vehicle_id, schedule_id }`, bản đồ gỡ xe, khách đang xem tuyến nhận `trips:update` mới.
 - **Luồng ngoại lệ:**
-  - Lịch trình không thuộc xe → ack `SCHEDULE_NOT_ALLOWED`.
-  - Gói sai định dạng → bỏ, server ghi cảnh báo có giới hạn.
-  - Phiên mới cùng xe → phiên cũ nhận `session:replaced` và bị ngắt (không phát `vehicle_offline`).
+  - Sai/thiếu token hoặc không phải DRIVER → `connect_error: UNAUTHORIZED`; tài xế chưa gán xe → `NO_VEHICLE`; lỗi CSDL → `SERVER_ERROR`.
+  - Lịch trình không thuộc xe → ack `SCHEDULE_NOT_ALLOWED`; phiên bị thay trong lúc chờ CSDL → `SESSION_REPLACED`; lỗi CSDL → `SERVER_ERROR` (thiết bị thử lại).
+  - Gói sai định dạng → bỏ, server ghi cảnh báo tối đa 1 lần / 10 giây / phiên.
+  - Phiên mới cùng xe → phiên cũ nhận `session:replaced` và bị ngắt; chuyến **không** kết thúc (không phát `vehicle_offline`) vì xe vẫn chạy ở phiên mới.
   - Lỗi ghi log → `console.error` có giới hạn; gói vẫn được phát.
-- **Viewer (namespace `/`)** không gửi được GPS; chỉ gửi sự kiện đăng ký theo dõi (`trips:subscribe`, `trip:watch`, …).
+- **Viewer (namespace `/`)** không gửi được GPS; chỉ gửi sự kiện đăng ký theo dõi (`trips:subscribe`, `trips:unsubscribe`, `trip:watch`, `trip:unwatch`). Handshake `/`: token nhân viên → room `staff`; token tài xế → room xe của mình; không token / token sai → khách (không báo lỗi).
+- **Simulator** (`simulator/`, `npm start -- --count N`): mỗi tài xế ảo đăng nhập `driverNN` (mật khẩu mặc định `driver123`), chọn chuyến có giờ xuất bến gần nhất đã qua theo giờ VN (trước chuyến đầu ngày thì lấy chuyến đầu), xuất phát ở vị trí ngẫu nhiên trên lộ trình, chạy vòng 30–40 km/h, phát mỗi 500 ms, tới giờ chuyến kế tiếp thì đổi chuyến và chạy từ đầu lộ trình chiều mới. Ctrl+C gửi `trip:end` cho từng xe.
 - **Code:** [sockets/](../backend/src/sockets/), [simulator/](../simulator/).
 
 #### UC-23 — Tài xế chạy chuyến & phát GPS
@@ -425,7 +453,8 @@ Tiền điều kiện chung: đã đăng nhập với vai trò ADMIN hoặc MANA
 - **Luồng ngoại lệ:**
   - Trang không chạy trên HTTPS/localhost → không đọc được GPS, báo lỗi.
   - Thiết bị khác chiếm xe → banner "Xe đang được điều khiển từ thiết bị khác".
-  - Token hết hạn → quay về màn đăng nhập.
+  - Token hết hạn / không hợp lệ (401/403) → xóa token, quay về màn đăng nhập. Lỗi 5xx hoặc mất mạng → giữ token để thử lại.
+  - Sai mật khẩu → 401; tài khoản không phải tài xế → 403 "Tài khoản không phải tài xế"; chưa gán xe → 403 "Tài xế chưa được gán xe".
   - Mất kết nối → tự kết nối lại và gửi lại `trip:start`; lỗi tạm thời (`SERVER_ERROR`) thử lại sau 5 giây.
 - **Ghi chú:** Badge nguồn GPS cho biết vị trí xe đến từ `Điện thoại` (trang này đang phát), `Thiết bị khác` (simulator/điện thoại khác) hay `Chưa có tín hiệu` (> 10 giây).
 - **Code:** [driver.html](../frontend/driver.html), [views/driver/](../frontend/src/views/driver/), [driver.controller.js](../backend/src/modules/driver/driver.controller.js).
@@ -463,11 +492,18 @@ Tiền điều kiện chung: đã đăng nhập với vai trò ADMIN hoặc MANA
   3. Thay toàn bộ dữ liệu 4 bảng `bus_routes`, `bus_stops`, `route_paths`, `route_stops` bằng nội dung `database/busdata.sql` **trong một transaction**, rồi đối chiếu số dòng với dòng tiêu đề của file.
   4. Giữ nguyên tài khoản và xe; xóa lịch phân công trỏ tới tuyến không còn tồn tại.
 - **Luồng chính — xuất (`npm run db:export`):** Ghi 4 bảng trên ra `database/busdata.sql`, mỗi dòng dữ liệu một dòng, sắp theo khóa ổn định, hình học dạng WKT, để `git diff` chỉ hiện các dòng bị sửa. Dùng sau khi chỉnh dữ liệu qua trang quản trị hoặc import JSON.
+- **Luồng chính — tạo tài xế demo (`npm run db:seed-drivers -- --count N`, mặc định 20, tối đa 99):**
+  1. Bổ sung vai trò DRIVER và cột `vehicles.driver_user_id` nếu CSDL theo schema cũ (bước này server cũng tự chạy khi khởi động).
+  2. Chọn ⌈N / 4⌉ tuyến có đủ lộ trình 2 chiều (tuyến số trước, tuyến chữ sau).
+  3. Trong một transaction, upsert tài khoản `driver01…driverNN` (DRIVER, mật khẩu `driver123` hoặc `SEED_DRIVER_PASSWORD`) và xe `DRV_01…DRV_NN` (biển `51B-900.NN`) đã gán tài xế; 4 tài xế mỗi tuyến.
+  4. Thay lịch trình của từng xe: 17 chuyến/ngày, xuất bến 05:00 + (thứ tự tài xế trong tuyến)×15′ + k×60′, đổi chiều sau mỗi chuyến → mỗi tuyến có chuyến 15 phút một lần, mỗi chiều trung bình 30 phút một lần.
+  5. Xóa tài khoản/xe seed có số thứ tự lớn hơn N của lần chạy trước (nhật ký GPS của các xe này bị xóa theo).
+- **Ghi chú seed:** Chạy lại an toàn (upsert theo khóa cố định nên giữ nhật ký GPS của xe còn lại). Không đủ tuyến 2 chiều → script báo lỗi, không ghi dữ liệu (bước bổ sung cột ở bước 1 chạy ngoài transaction nên vẫn giữ).
 - **Luồng ngoại lệ:**
   - Lỗi SQL trong `busdata.sql` (giữa `START TRANSACTION` và `COMMIT`) → dữ liệu 4 bảng giữ nguyên như cũ.
   - Các bước bổ sung cột / đổi khóa chính trong `ensureSchema` chạy **ngoài** transaction, nên không được hoàn tác nếu bước sau lỗi.
   - Số dòng sau khi nạp không khớp tiêu đề file → script thoát với mã lỗi 1, nhưng dữ liệu **đã được COMMIT**.
-- **Code:** [import_busdata_sql.js](../backend/scripts/import_busdata_sql.js), [export_busdata_sql.js](../backend/scripts/export_busdata_sql.js).
+- **Code:** [import_busdata_sql.js](../backend/scripts/import_busdata_sql.js), [export_busdata_sql.js](../backend/scripts/export_busdata_sql.js), [seed_drivers.js](../backend/scripts/seed_drivers.js), [migrations.js](../backend/src/config/migrations.js).
 
 ---
 
@@ -475,27 +511,32 @@ Tiền điều kiện chung: đã đăng nhập với vai trò ADMIN hoặc MANA
 
 Ký hiệu: ✅ được phép · ❌ bị chặn · ⚠️ API cho phép nhưng giao diện không cung cấp.
 
-| Endpoint | Khách | MANAGER | ADMIN |
-|---|:-:|:-:|:-:|
-| `POST /auth/login` | ✅ (chỉ thành công với ADMIN/MANAGER) | ✅ | ✅ |
-| `GET /auth/me` | ❌ | ✅ | ✅ |
-| `GET /routes`, `/paths`, `/routes/:id/path`, `/stops`, `/routes/:id/stops`, `/vehicles`, `/schedules` | ✅ | ✅ | ✅ |
-| `GET /trip-plan` | ✅ | ✅ | ✅ |
-| `POST/PUT/DELETE /routes…` | ❌ | ✅ | ✅ |
-| `POST /routes/:id/path` | ❌ | ⚠️ | ⚠️ |
-| `POST/PUT/DELETE /stops…`, `POST/DELETE /routes/:id/stops…` | ❌ | ✅ | ✅ |
-| `POST/PUT/DELETE /vehicles…` | ❌ | ✅ | ✅ |
-| `POST/PUT/DELETE /schedules…` | ❌ | ✅ | ✅ |
-| `GET /admin/stats` | ❌ | ✅ | ✅ |
-| `POST /import/json`, `GET /export/json` | ❌ | ✅ | ✅ |
-| `GET /users` | ❌ | ⚠️ (tab bị ẩn) | ✅ |
-| `POST/PUT/DELETE /users…` | ❌ | ❌ | ✅ |
-| Socket `fleet_location_update` (nhận) | ✅ | ✅ | ✅ |
-| Socket `gps_ping` (gửi) | ✅ (không xác thực) | ✅ | ✅ |
+| Endpoint / sự kiện | Khách | Tài xế | MANAGER | ADMIN |
+|---|:-:|:-:|:-:|:-:|
+| `POST /auth/login` | ✅ (chỉ thành công với ADMIN/MANAGER) | ❌ 403 | ✅ | ✅ |
+| `POST /auth/driver/login` | ✅ (chỉ thành công với DRIVER đã gán xe) | ✅ | ❌ 403 | ❌ 403 |
+| `GET /auth/me` | ❌ | ✅ (giao diện không dùng) | ✅ | ✅ |
+| `GET /driver/me` | ❌ | ✅ | ❌ | ❌ |
+| `GET /routes`, `/paths`, `/routes/:id/path`, `/stops`, `/routes/:id/stops`, `/vehicles`, `/schedules` | ✅ | ✅ | ✅ | ✅ |
+| `GET /trip-plan` | ✅ | ✅ | ✅ | ✅ |
+| `POST/PUT/DELETE /routes…` | ❌ | ❌ | ✅ | ✅ |
+| `POST /routes/:id/path` | ❌ | ❌ | ⚠️ | ⚠️ |
+| `POST/PUT/DELETE /stops…`, `POST/DELETE /routes/:id/stops…` | ❌ | ❌ | ✅ | ✅ |
+| `POST/PUT/DELETE /vehicles…` | ❌ | ❌ | ✅ | ✅ |
+| `POST/PUT/DELETE /schedules…` | ❌ | ❌ | ✅ | ✅ |
+| `GET /admin/stats` | ❌ | ❌ | ✅ | ✅ |
+| `POST /import/json`, `GET /export/json` | ❌ | ❌ | ✅ | ✅ |
+| `GET /users` | ❌ | ❌ | ⚠️ (tab bị ẩn) | ✅ |
+| `POST/PUT/DELETE /users…` | ❌ | ❌ | ❌ | ✅ |
+| Socket `/`: `trips:subscribe`, `trip:watch` (và unsubscribe/unwatch) | ✅ | ✅ | ✅ | ✅ |
+| Socket `/`: nhận `trips:update` | ✅ tuyến đã subscribe | ✅ tuyến đã subscribe | ✅ tuyến đã subscribe | ✅ tuyến đã subscribe |
+| Socket `/`: nhận `fleet_location_update`, `vehicle_offline` | Chỉ chuyến đang `trip:watch` | Xe của mình (+ chuyến đang watch) | Mọi xe (room `staff`) | Mọi xe (room `staff`) |
+| Socket `/device`: `trip:start`, `gps_ping`, `trip:end` | ❌ | ✅ (chỉ lịch trình của xe mình) | ❌ | ❌ |
 
 Ghi chú:
 - `POST /routes/:id/path` có trong API nhưng giao diện không gọi; lộ trình chỉ được ghi qua UC-16.
-- Các API đọc là công khai, kể cả danh sách xe (tài xế, biển số) và lịch phân công.
+- Các API đọc là công khai, kể cả danh sách xe (tài xế, biển số, `driver_user_id`) và lịch phân công.
+- Trên socket `/`, token sai hoặc hết hạn không bị từ chối mà bị coi là khách.
 
 ---
 
@@ -508,13 +549,16 @@ Các chức năng sau **chưa có** trong mã nguồn; không nên mô tả chú
 | Tìm đường có chuyển tuyến | `GET /trip-plan` chỉ tìm tuyến đi thẳng (một tuyến, cùng chiều). |
 | Giới hạn quãng đi bộ tới trạm lên | Không giới hạn bán kính phía xuất phát; trạm lên có thể cách khách rất xa. |
 | Xem lại lịch sử hành trình xe | `vehicle_tracking_logs` chỉ được ghi và đếm trên Tổng quan, không có API đọc lại. |
-| Hành khách xem giờ xuất bến / lịch chạy | Bản đồ không đọc `schedules`. |
-| Chạy xe theo giờ xuất bến | `departure_time` chỉ hiển thị trên trang tài xế; simulator chạy liên tục bất kể giờ. |
+| Bảng giờ chạy cả ngày cho hành khách | Khách chỉ thấy chuyến đang chạy và chuyến xuất bến trong cửa sổ 15 phút trước – 2 giờ sau (UC-05); không có bảng giờ đầy đủ. |
+| ETA tới trạm xuống / thời gian cả hành trình | ETA chỉ tính tới trạm lên; không ước lượng giờ tới điểm đến. |
+| Ép chạy theo giờ xuất bến | Server không kiểm tra giờ khi `trip:start` và không tự kết thúc chuyến; chỉ simulator tự đổi chuyến theo giờ. |
+| Lịch theo ngày / thứ | `schedules` chỉ có giờ, lặp lại mỗi ngày. |
+| Giữ trạng thái chuyến khi khởi động lại backend | Registry chuyến đang chạy nằm trong bộ nhớ của 1 process; khởi động lại thì mất cho tới khi thiết bị kết nối lại và gửi lại `trip:start`. Không chạy được nhiều instance. |
 | Geocoding địa chỉ thật | Tìm theo địa chỉ chỉ so khớp chuỗi `address` của trạm phía client, không gọi dịch vụ geocode. |
-| "Trạm tiếp theo" chính xác trên bản đồ công khai | Trang tài xế đã tính theo lộ trình + stop_order; bảng "Theo dõi xe" của bản đồ công khai vẫn dùng trạm gần nhất. |
+| "Trạm tiếp theo" chính xác trên bảng điều hành của nhân viên | Trang tài xế đã tính theo lộ trình + `stop_order`; bảng "Theo dõi xe" của nhân viên trên bản đồ vẫn lấy trạm gần xe nhất theo đường chim bay. (Khách không thấy trạm tiếp theo mà thấy ETA.) |
 | Vẽ / sửa lộ trình trực tiếp trên trang quản trị | Chỉ nạp qua JSON (UC-16) hoặc `busdata.sql` (UC-22). |
 | Sửa thuộc tính mở rộng | `route_type`, `color`, `operation_time`, `headway_text`, `stop_code`, `stop_type`, `status` không có trên form. |
 | Kiểm tra xung đột lịch | Không chặn một xe bị phân hai chuyến trùng giờ. |
 | Sao lưu/khôi phục trọn vẹn | Export không gồm `route_stops`, `schedules`, `users`; khôi phục `full_backup` bỏ qua `paths`. |
 | Vai trò VIEWER | Có trong ENUM nhưng không đăng nhập được. |
-| Gán tài xế cho xe trên trang quản trị | Chưa có UI; gán qua seed (`npm run db:seed-drivers`) hoặc SQL `vehicles.driver_user_id`. |
+| Gán tài xế cho xe trên trang quản trị | Tạo được tài khoản DRIVER (UC-18) nhưng chưa có UI/API gán xe; gán qua seed (`npm run db:seed-drivers`) hoặc SQL `vehicles.driver_user_id`. |

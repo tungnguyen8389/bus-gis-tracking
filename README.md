@@ -25,6 +25,9 @@ Bus_project/
 │   │   └── sockets/                # index.js, viewer.socket.js ("/" theo room: trip/vehicle/staff/route), device.socket.js + device.auth.js ("/device" tài xế), trip-registry.js, trip-list.js, eta.js, route-geometry.js, gps.validate.js, tracking-log.js
 │   └── scripts/                    # db:import / db:export busdata.sql, db:seed-drivers (tài xế demo)
 ├── docs/
+│   ├── USE_CASES.md                # Đặc tả use case theo tác nhân
+│   ├── DATABASE_SPECIFICATION.md   # Đặc tả CSDL không gian: ERD, từ điển dữ liệu, chỉ mục, DDL
+│   ├── DATA_FLOW.md                # Luồng dữ liệu: kho dữ liệu, DFD, sequence realtime, ma trận CRUD
 │   └── NODEJS_VS_LARAVEL_ANALYSIS.md # Phân tích so sánh công nghệ Backend (Node.js vs Laravel)
 ├── frontend/
 │   ├── index.html                  # Shell bản đồ giám sát 2D Realtime (ArcGIS JS SDK v4.29)
